@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 19 — brána spuštěná ručně měří špatný strom</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 19<br />
+nazev: gate-worktree<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne<br />
+vetev: ai/chip-19/gate-worktree<br />
+worktree: ../CHIPS-chip-19</p>
+<hr />
+<h1 id="chip-19-brana-spustena-rucne-meri-spatny-strom">CHIP 19 — brána spuštěná ručně měří špatný strom</h1>
+<p><code>chip_gate.py NN</code> bez <code>--repo</code> vezme <code>repo:</code> z frontmatteru, což je <strong>hlavní<br />
+strom</strong>. Tam ale práce chipu ještě není — merguje se do něj teprve. Brána tedy<br />
+projde nad starým kódem a vrátí zelenou, která o mergovaném stavu neříká nic.</p>
+<p>Doloženo ve vlně 5: brána chipu 18 hlásila zelenou v hlavním stromě, kde běželo<br />
+<strong>454 testů</strong>, zatímco ve worktree chipu jich bylo <strong>481</strong>. Rozdíl 27 testů je<br />
+přesně ta práce, kterou brána neviděla.</p>
+<p>Hook to dělá správně — <code>hook_chip_gate.kde_overit()</code> hlavní strom výslovně<br />
+odmítá s odůvodněním „falešná zelená je horší než žádná". CLI a hook si tedy<br />
+dnes protiřečí a <strong>hook má pravdu</strong>. Tohle je nejzávažnější typ vady, jakou<br />
+tenhle projekt může mít: brána, která tvrdí zelenou o něčem jiném, než co se<br />
+merguje.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — default <code>chip_gate.py NN</code> = <strong>worktree chipu</strong> z frontmatteru<br />
+      (<code>worktree:</code>), ne <code>repo:</code></li>
+<li>[x] #2 — <code>--repo &lt;cesta&gt;</code> zůstává a má přednost; je to výjimka pro vědomé<br />
+      spuštění jinde, ne běžná cesta</li>
+<li>[x] #3 — chybějící / nevyplněné <code>worktree:</code> → <strong>selhat s hláškou</strong>, ne tiše<br />
+      spadnout zpátky na <code>repo:</code>. Tichý fallback je celá tahle vada.</li>
+<li>[x] #4 — worktree v briefu je, ale na disku není → selhat s hláškou, která<br />
+      řekne, čím ho obnovit (<code>chip_run.py NN</code>)</li>
+<li>[x] #5 — cesta ve <code>worktree:</code> se řeší stejně jako v <code>chip_run.cesty()</code>:<br />
+      relativní bere jen jméno adresáře a klade ho vedle repa. Dva nástroje<br />
+      nesmí tutéž hodnotu chápat jinak.</li>
+<li>[x] #6 — hlavička výpisu ať jasně říká, ve kterém stromě brána běžela<br />
+      (dnes cestu vypisuje, ale nejde z ní poznat, že je to ten špatný)</li>
+<li>[x] #7 — když <code>worktree:</code> ukazuje na týž strom jako <code>repo:</code>, hlásit to jako<br />
+      chybu — je to táž falešná zelená, jen zapsaná v briefu (stejné pravidlo<br />
+      jako v <code>hook_chip_gate.kde_overit()</code>)</li>
+<li>[x] #8 — chip ve stavu <code>merged</code>: worktree už neexistuje (uklizen po mergi).<br />
+      Rozhodni a <strong>zapiš do briefu do Logu</strong>, jestli má takový chip brána<br />
+      odmítnout, nebo povolit <code>--repo</code>; nehádej mlčky.</li>
+<li>[x] #9 — testy ke všem bodům výš, včetně regrese: <code>--repo</code> se chová jako dnes</li>
+<li>[x] #10 — docstring modulu + <code>--help</code> u <code>--repo</code> doplnit o nové chování</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_gate.py
+tests/test_chip_gate.py
+</code></pre>
+<p><code>tools/hook_chip_gate.py</code> je <strong>mimo nárok</strong> — hook už to dělá správně a jeho<br />
+<code>kde_overit()</code> je vzor, podle kterého se řídíš. Dokumentaci (<code>/chip</code> skill,<br />
+metodika) dopisuje orchestrátor.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> projde a testů je <strong>víc</strong> než<br />
+      dnešních 523</li>
+<li>[x] test, který postaví brief s <code>worktree:</code> mířícím do stromu, kde brána<br />
+      projde, a <code>repo:</code> do stromu, kde <strong>neprojde</strong> — a ověří, že <code>chip_gate</code><br />
+      bez <code>--repo</code> vrátí výsledek podle <strong>worktree</strong>, ne podle repa.<br />
+      Tenhle test je jádro chipu: dnes by selhal.</li>
+<li>[x] test, který ověří, že bez vyplněného <code>worktree:</code> nástroj <strong>selže</strong><br />
+      (nenulový kód) a nespustí ani jeden příkaz brány</li>
+<li>[x] <code>python tools/chip_gate.py 19 --repo &lt;libovolný strom&gt;</code> se chová jako dnes</li>
+<li>[x] <code>tools/chip_gate.py</code> nemá žádný nový import mimo stdlib</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Zastav se, zapiš do Logu a nech na uživateli:</p>
+<ul>
+<li><strong>jakákoli změna <code>hook_chip_gate.py</code></strong> — je mimo nárok a je to jediné tvrdé<br />
+  vynucení v celém projektu</li>
+<li>změna tvaru názvu větve nebo <code>id_z_vetve()</code> — hook na tom stojí</li>
+<li>rozhodnutí z issue #8, pokud by znamenalo, že brána u <code>merged</code> chipu mlčky<br />
+  projde (to je zpátky falešná zelená)</li>
+<li>jakýkoli zásah mimo „Dotčené soubory"</li>
+<li>nová externí závislost</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testy: <code>python -m unittest discover -s tests -v</code>, stdlib <code>unittest</code>, <strong>žádný<br />
+  pytest</strong>. Vlastní <code>tempfile</code> fixture, úklid po sobě.</li>
+<li><code>chip_common.CHIPS_DIR</code> je globální stav; v <code>tearDown</code> ho vracej.</li>
+<li><code>tests/test_chip_gate.py</code> už má základ <code>Zaklad</code> s dočasným repem a metodu<br />
+<code>worktree(cislo)</code>, která staví skutečný git strom — nové testy pověs na ně.</li>
+<li><strong>Přečti si <code>hook_chip_gate.kde_overit()</code> a jeho docstring dřív, než začneš.</strong><br />
+  Je tam vysvětlené, proč se hlavní strom odmítá; tvoje verze má být stejné<br />
+  pravidlo, jen ve druhém nástroji. Kde to jde, chovej se identicky —<br />
+  rozcházející se kopie téhož pravidla jsou v tomhle projektu opakovaná vada.</li>
+<li><code>chip_gate.brana(chip, repo)</code> volá hook, takže <strong>její signatura se nesmí<br />
+  změnit</strong> — hook ji importuje. Měň <code>main()</code>, ne <code>brana()</code>.</li>
+<li>Sladění s <code>chip_run.cesty()</code> (bod #5) čti, ale <code>chip_run.py</code> needituj.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-28</td>
+<td>ready</td>
+<td>brief založen orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><code>chip_gate.kde_spustit()</code> + přepsaný <code>main()</code>: bez <code>--repo</code> se měří worktree z briefu, <code>brana()</code> beze změny (hook si ji importuje)</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>rozhodnutí #8</strong> — chip ve stavu <code>merged</code>: brána ODMÍTNE (exit 1) a v hlášce poradí <code>--repo</code>. Po mergi je hlavní větev směs všech chipů; zelená odtamtud o tomhle chipu neplatí, takže tichý přechod na <code>repo:</code> by byla táž falešná zelená, jen u jiného stavu. <code>--repo</code> zůstává vědomou cestou, jak bránu nad zmergovaným stavem spustit.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>nález (mimo nárok, neopraveno)</strong> — u ABSOLUTNÍ hodnoty <code>worktree:</code> bere <code>chip_run.cesty()</code> jen jméno adresáře a klade ho vedle repa, kdežto <code>hook.kde_overit()</code> i nový <code>kde_spustit()</code> ji respektují, jak je. <code>chip_run</code> tedy worktree založí jinde, než kam se brána dívá. Není to falešná zelená (brána strom nenajde a selže), ale je to past. Zdokumentováno testem <code>test_absolutni_cesta_se_s_chip_run_rozchazi</code> (<code>@unittest.expectedFailure</code>) — sada si o tom řekne, až se to opraví. Rozhodnutí, kterou stranu srovnat, je na uživateli.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>pravidlo je nově zapsané dvakrát (CLI + hook), protože hláška musí radit podle kontextu. Že se kopie nerozejdou ve VERDIKTU, drží <code>test_brana_a_hook_resi_worktree_stejne</code> — stejná pojistka jako u <code>VETEV_CHIP</code></td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>brána: 546 testů (523 → +23, z toho 1 nový expectedFailure = nález výš; 2 původní patří chipu 20), lint rc 0. <code>python tools/chip_gate.py 19</code> teď běží v <code>CHIPS-chip-19</code>, ne v hlavním stromě. HTML k briefu NEPŘEGENEROVÁNO — <code>md2html.py</code> drží chip 20</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>19-gate-worktree.md</code> &middot; CHIP 19 — brána spuštěná ručně měří špatný strom</div>
+</body>
+</html>

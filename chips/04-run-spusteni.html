@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 04 — `chip_run.py`: spuštění okna a testovatelnost</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 04<br />
+nazev: run-spusteni<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-04/run-spusteni<br />
+worktree: ../CHIPS-chip-04</p>
+<hr />
+<h1 id="chip-04-chip_runpy-spusteni-okna-a-testovatelnost">CHIP 04 — <code>chip_run.py</code>: spuštění okna a testovatelnost</h1>
+<p><code>chip_run.py</code> dnes udělá worktree a vypíše zadání, které musíš ručně<br />
+zkopírovat. Zároveň je celý v jedné <code>main()</code>, takže se nedá testovat.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — vytáhnout z <code>main()</code> čistou funkci <code>cesty(chip)</code> → <code>(repo, vetev, worktree)</code>, bez vedlejších efektů</li>
+<li>[x] #2 — vytáhnout čistou funkci <code>zadani(chip, worktree, vetev)</code> → text zadání (dnes inline <code>ZADANI.format(...)</code>)</li>
+<li>[x] #3 — <code>--spustit</code>: po založení worktree rovnou spustit Claude Code ve worktree se zadáním</li>
+<li>[x] #4 — když <code>claude</code> není na PATH, <code>--spustit</code> skončí srozumitelnou hláškou a kódem 1 (ne tracebackem)</li>
+<li>[x] #5 — <code>--stav</code>: po úspěšném založení worktree přepsat ve frontmatteru briefu <code>stav: ready</code> → <code>running</code></li>
+<li>[x] #6 — přepis frontmatteru zachová zbytek souboru bajt v bajt (včetně CRLF a diakritiky)</li>
+<li>[x] #7 — <code>--dry-run</code> nesmí sáhnout na disk ani spustit git; platí i pro <code>--stav</code> a <code>--spustit</code></li>
+<li>[x] #8 — návratové kódy: chip nenalezen = 1, chybí <code>repo:</code> = 1, repo není git = 1, worktree už existuje = 1, stav != <code>ready</code> = 1</li>
+<li>[x] #9 — testy pro <code>cesty()</code>, <code>zadani()</code>, přepis stavu, chybějící <code>claude</code> a všechny návratové kódy z #8</li>
+<li>[x] #10 — aktualizovat docstring modulu (dnes tvrdí „Nespouští Claude Code")</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_run.py
+tests/test_chip_run.py       # nový
+</code></pre>
+<p>Nesmíš měnit <code>chip_common.py</code> ani <code>chip_lint.py</code> — když ti tam něco chybí,<br />
+dopočítej si to u sebe a zapiš do Logu, že by to patřilo do společného modulu.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>python tools/chip_run.py 04 --dry-run</code> funguje dál jako dnes (vypíše příkazy, nic neprovede)</li>
+<li>[x] <code>cesty()</code> i <code>zadani()</code> jsou volatelné bez gitu a bez disku, pokryté testy</li>
+<li>[x] žádný test nespustí skutečný <code>git worktree add</code> ani skutečné <code>claude</code> (mockuj <code>subprocess</code>)</li>
+<li>[x] pouze standardní knihovna (žádné nové závislosti)</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, popiš proč v Logu.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_run.py 04 --dry-run
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, zapiš do Logu, nehádej.</strong></p>
+<ul>
+<li>změna <code>chip_common.py</code> nebo <code>chip_lint.py</code> (nárokují si je jiné chipy)</li>
+<li>nová závislost mimo stdlib</li>
+<li>jakýkoli <code>git push</code>, <code>git merge</code> nebo zápis do jiné větve</li>
+<li>automatické mazání worktree bez <code>--uklid</code></li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Dnešní stav: <code>git()</code> je tenký wrapper nad <code>subprocess.call</code>, <code>ZADANI</code> je<br />
+  šablona textu, všechno ostatní je v <code>main()</code>. Zachovej stávající chování<br />
+  a hlášky — mění se struktura, ne UX.</li>
+<li><code>--spustit</code> spouštěj přes <code>subprocess.call([claude_exe, zadani], cwd=worktree)</code>,<br />
+  cestu hledej <code>shutil.which("claude")</code>. Na Windows to může být <code>claude.cmd</code> —<br />
+<code>shutil.which</code> to vyřeší, natvrdo psaný název ne.</li>
+<li>Přepis stavu dělej <strong>textově</strong> (najdi řádek <code>stav:</code> mezi prvními <code>---</code>), ne<br />
+  přes přeparsování a serializaci — parser v <code>chip_common</code> je jednosměrný a<br />
+  serializaci neumí.</li>
+<li>Testy: <code>unittest.mock.patch("subprocess.call")</code> a <code>patch("shutil.which")</code>.<br />
+  Dočasné repo si vyrob přes <code>tempfile.TemporaryDirectory()</code>; <code>git init</code> v testu<br />
+  nedělej, stačí vytvořit prázdný adresář <code>.git</code>, protože kód testuje jen jeho existenci.</li>
+<li><code>chip_common.nastav_chips_dir()</code> přepíná adresář s briefy; v <code>tearDown</code> ho vrať zpátky.</li>
+<li>Import v testu: <code>sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))</code>.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td>refaktor: <code>cesty()</code>, <code>zadani()</code>, <code>prepis_stav()</code> vytaženy z <code>main()</code>; <code>main(argv)</code> kvůli testům</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td><code>--spustit</code> kontroluje <code>shutil.which("claude")</code> <strong>před</strong> <code>git worktree add</code> — jinak by po chybějícím claude zůstal poloviční worktree, který blokuje další spuštění</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td><code>prepis_stav()</code> (textový zápis frontmatteru) by patřil do <code>chip_common.py</code>, ale ten si nárokuje jiný chip → ponecháno lokálně v <code>chip_run.py</code>, ke sloučení po merge</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>gated</td>
+<td>brána zelená: 29 testů OK, <code>--dry-run</code> výstup shodný s předchozím chováním, <code>chip_lint.py</code> 0 chyb</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>merged</td>
+<td>brána ověřena orchestrátorem nezávisle (testy + lint), sloučeno do master, worktree uklizen</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>merged</td>
+<td>Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>04-run-spusteni.md</code> &middot; CHIP 04 — `chip_run.py`: spuštění okna a testovatelnost</div>
+</body>
+</html>

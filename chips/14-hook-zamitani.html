@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 14 — hook radši ověří něco jiného, než by zamítl</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 14<br />
+nazev: hook-zamitani<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na: 13<br />
+repo: ..<br />
+vetev: ai/chip-14/hook-zamitani<br />
+worktree: ../CHIPS-chip-14</p>
+<hr />
+<h1 id="chip-14-hook-radsi-overi-neco-jineho-nez-by-zamitl">CHIP 14 — hook radši ověří něco jiného, než by zamítl</h1>
+<p>Druhá polovina rozřezaného chipu 10. Zatímco chip 13 řeší, <strong>odkud</strong> hook bere<br />
+vstup, tenhle řeší, <strong>kdy má říct ne</strong>. Obě zbylé díry mají stejný tvar: hook<br />
+narazí na stav, ve kterém nemůže ověřit to, co se merguje — a místo zamítnutí<br />
+ověří něco jiného a vrátí zelenou.</p>
+<p><strong>Závisí na chipu 13</strong> (týž soubor). Větev se zakládá z jeho výsledku, ne<br />
+z masteru — před založením worktree ověř, že chip 13 je <code>merged</code>.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <strong>Fallback brány na hlavní strom</strong> (<code>kde_overit</code>, ř. ~179): když<br />
+      worktree chipu neexistuje, brána se spustí v hlavním stromě — který<br />
+      změny chipu z definice nemá — a vrátí zelenou nad starým kódem.<br />
+      Docstring to dnes hájí jako „lepší ověřit něco než nic"; to je přesně<br />
+      obráceně. Oprav: bez worktree <strong>zamítnout</strong> s vysvětlením („worktree<br />
+      chipu neexistuje — bránu není kde ověřit; obnov worktree, nebo merguj<br />
+      vědomě a vysvětli to uživateli"), ne tiše ověřit jiný strom.</li>
+<li>[x] #2 — <strong>Brána běží nad working tree, merge bere committed tip</strong><br />
+      (<code>main()</code>, ř. ~245). Necommitnuté změny ve worktree znamenají verdikt o jiném<br />
+      stavu, než jaký se merguje — a to v obou směrech: zelená nad<br />
+      rozdělanou opravou, která není v commitu, i červená nad rozbitým<br />
+      experimentem, který se nemerguje. Oprav: před spuštěním brány<br />
+      zkontroluj <code>git -C &lt;worktree&gt; status --porcelain</code>; když je strom<br />
+      špinavý, zamítni s hláškou „ve worktree jsou necommitnuté změny —<br />
+      brána by ověřovala jiný stav, než jaký se merguje".</li>
+<li>[x] #3 — regresní testy na oba scénáře; každý musí na verzi PŘED tímhle<br />
+      chipem selhat (podstrč starou verzi, hlášky do Logu)</li>
+<li>[x] #4 — stávající testy (<code>TestHook</code>, parity test, testy z chipu 13) musí<br />
+      dál procházet; co se změnou rozbije právem, uprav s komentářem proč</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/hook_chip_gate.py
+tests/test_chip_gate.py
+</code></pre>
+<p>Nesahej na <code>chip_gate.py</code> (parity test s ním musí dál platit), ani na<br />
+<code>chip_lint.py</code>, <code>chip_common.py</code>, <code>chip_slice.py</code>, <code>chip_run.py</code>.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] chybějící worktree končí zamítnutím, ne zelenou — test</li>
+<li>[x] špinavý worktree končí zamítnutím — test</li>
+<li>[x] hláška zamítnutí uživateli říká, <strong>co má udělat</strong>, ne jen co je špatně</li>
+<li>[x] oba nové testy na předchozí verzi hooku selžou (doloženo v Logu)</li>
+<li>[x] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna <code>chip_gate.py</code>, <code>chip_lint.py</code>, <code>chip_common.py</code></li>
+<li>kdyby zamítnutí u #1 nebo #2 blokovalo i legitimní běžný merge (falešný<br />
+  poplach v denním provozu) — zastav se a zapiš, neřeš to změkčením</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Hook čte JSON na stdin (<code>tool_input.command</code>, <code>cwd</code>), výstup je buď nic<br />
+  (povoleno) nebo JSON s <code>permissionDecision: deny</code>. Vzor volání s podstrčeným<br />
+  stdin je v <code>tests/test_chip_gate.py</code>, třída <code>TestHook</code>.</li>
+<li>Bias projektu: <strong>raději zamítnout navíc než pustit červený merge.</strong> U obou<br />
+  nálezů je zamítnutí správná odpověď, ne heuristika — nesnaž se uhodnout,<br />
+  jestli to „asi bude v pořádku".</li>
+<li><code>kde_overit()</code> má dnes návratový typ <code>Path</code> a nikdy neselže. Po opravě musí<br />
+  umět říct „nemám kde" — zvol tvar, který volající nemůže omylem ignorovat<br />
+  (výjimka nebo <code>None</code> s povinným ošetřením), ne prázdnou cestu.</li>
+<li>Rozlišuj <strong>worktree hlavního stromu</strong>: když je <code>repo:</code> chipu totožné<br />
+  s worktree, kontrola špinavosti by zamítala běžný stav vývoje. Ověř si na<br />
+  reálném rozložení, co se stane, a případ zapiš do Logu.</li>
+<li>Regresní důkaz: předchozí verzi vytáhni <code>git show HEAD:tools/hook_chip_gate.py</code><br />
+  do dočasného souboru a <strong>zaregistruj do <code>sys.modules</code> před importem testů</strong><br />
+  (<code>sys.path.insert</code> nestačí — načte se opravená verze a důkaz je bezcenný).<br />
+  Ověř assertem, že testovaný modul je opravdu ta podstrčená kopie.</li>
+<li><strong>Chip 13 hook právě přepsal</strong>: přibyly <code>segmenty()</code>, <code>tokeny()</code>,<br />
+<code>merge_tokeny()</code>, <code>pozicni()</code>, <code>cisla_chipu()</code>, <code>slozit()</code>; <code>main()</code> teď<br />
+  prochází VÍCE chip větví (octopus merge) v cyklu. Tvoje zamítnutí se musí<br />
+  chovat správně i uvnitř toho cyklu — zamítni na první větvi, která nejde<br />
+  ověřit, ne až po projití všech.</li>
+<li>Konvence: hlášky česky, docstringy vysvětlují proč. Odsazení kódu podle<br />
+  souboru (<code>tools/</code> je 4 mezery, PEP 8); dvě mezery se týkají odsazení<br />
+  vypisovaných hlášek, ne Pythonu.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>druhá polovina rozřezaného chipu 10 (nálezy #3 a #4)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#1: <code>kde_overit()</code> už nemá fallback na hlavní strom — vyhazuje novou <code>NeniKdeOverit</code>. Zvolena VÝJIMKA, ne <code>None</code>: <code>None</code> by šlo přehlédnout stejně snadno jako dosavadní tichý fallback (chyba by praskla až hluboko v bráně), výjimka projde skrz a merge zamítne. Zamítá se ve třech případech: worktree neexistuje, <code>worktree:</code> v briefu je prázdné, a <code>worktree:</code> ukazuje na strom, do kterého se merguje (táž falešná zelená, jen zapsaná v briefu — brána by tam ověřila stav PŘED mergem). Hláška vždy říká, co dělat: obnov worktree <code>python tools/chip_run.py NN</code> a merguj až po zelené, nebo merguj vědomě mimo hook a vysvětli uživateli, co tím obcházíš. Provozní důsledek: <strong>úklid worktree (<code>--uklid</code>) patří AŽ po mergi</strong> — je to v hlášce.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#2: nová <code>necommitnute(strom)</code> = <code>git status --porcelain</code> ve stromě CHIPU; neprázdný výstup → zamítnutí s výpisem prvních 10 položek a pokynem „commitni (nebo zahoď) a merguj znovu — merge bere commitnutý tip větve, ne working tree". Netrackované soubory se počítají (co není v commitu, to se nemerguje), ignorované ne — <code>__pycache__/</code> a <code>*.pyc</code> jsou v <code>.gitignore</code>, takže běh brány sám strom nešpiní (test <code>test_ignorovany_soubor_strom_nespini</code>). Když stav zjistit nejde (adresář není git strom, <code>git</code> chybí), zamítá se taky — nevědět, co ve stromě je, se pro potřeby brány rovná nemít ho. <code>import subprocess</code> je až uvnitř funkce, hook běží před každým příkazem shellu. Zamítá se HNED na první neověřitelné větvi octopus merge; testy <code>test_octopus_zamita_hned_na_prvni_neoveritelne_vetvi</code> a <code>test_brana_se_nad_spinavym_stromem_vubec_nespusti</code> to dokazují stopou (brána druhé/té větve se vůbec nespustí).</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td><strong>Past „hlavní strom je sám worktree a bývá špinavý" — ověřeno na reálném rozložení.</strong> <code>git worktree list</code> ve workspace: hlavní strom <code>CHIPS</code> (master) + <code>CHIPS-chip-14</code>; žádný z 13 briefů nemá <code>worktree:</code> mířící na hlavní strom (všechny <code>../CHIPS-chip-NN</code>), takže žádný legitimní merge se neblokuje. Kontrola špinavosti se pouští <strong>na strom chipu (<code>strom</code>), nikdy na cíl merge (<code>koren</code>)</strong> — rozeditované soubory v <code>CHIPS</code> při běžné práci merge neblokují; hlídá test <code>test_spinavy_hlavni_strom_merge_neblokuje</code> (repo úmyslně špinavé, worktree čisté → hook mlčí). Kdyby <code>worktree:</code> přesto na hlavní strom ukazoval, rozhodne se to DŘÍV v <code>kde_overit()</code> (viz #1) a uživatel dostane hlášku o špatném <code>worktree:</code>, ne matoucí „ve worktree jsou necommitnuté změny". Žádný T3: falešný poplach v denním provozu nevzniká.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>Ověřeno na živém rozložení (<code>echo … \| python tools/hook_chip_gate.py</code>): ve workspace po chipech 01–09 zůstaly ADRESÁŘE <code>CHIPS-chip-01..09</code> bez <code>.git</code> — <code>git worktree remove</code> smaže <code>.git</code>, ale adresář se zbytky ne. <code>is_dir()</code> na ně tedy sedne a chybějící worktree by se nepoznal; odhalí to až <code>git status</code> (exit 128). Zamítnutí je i tady správně (bránu není kde ověřit) a hláška to říká přímo: „Není to git strom chipu — typicky zbytek adresáře po úklidu worktree." Společný závěr hlášek „NEJDE OVĚŘIT" je jedna věta v <code>main()</code>: <code>python tools/chip_run.py NN</code> + „úklid <code>--uklid</code> patří AŽ po mergi".</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#3 regresní důkaz (<code>git show HEAD~1:tools/hook_chip_gate.py</code> → dočasný soubor, registrace do <code>sys.modules["hook_chip_gate"]</code> PŘED importem testů, ověřeno assertem <code>t.hook is mod</code> + <code>not hasattr(mod, "necommitnute")</code>): <strong>16 z 18 nových testů na PŮVODNÍ verzi selhalo</strong> (8 FAIL + 8 ERROR). Hlášky: 5× „hook MLČEL — merge by prošel bez ověření" (chybějící worktree, hláška co dělat, <code>worktree:</code> na cílový strom, octopus, špinavý worktree); „brána běžela nad stromem, který se nemerguje"; „'necommitnuté změny' not found in 'CHIPS brána chipu 01 (pokus) NEPROŠLA…'" (červená brána nad nemergovaným experimentem — verdikt o cizím stavu); 5× „AttributeError: module 'hook_chip_gate' has no attribute 'necommitnute'" a 3× „…has no attribute 'NeniKdeOverit'". Zelené zůstaly právem jen dva kontrolní testy, které ověřují, že se zamítat NESMÍ: <code>test_cisty_worktree_se_zelenou_branou_projde</code> a <code>test_spinavy_hlavni_strom_merge_neblokuje</code>. Na opravené verzi 18/18 OK.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#4 stávající testy: rozbil se právem jediný — <code>test_bez_worktree_spadne_na_repo</code> („lepší ověřit něco než nic") je přepsaný na <code>test_bez_worktree_selze</code> s komentářem, proč se obrátil. Fixture <code>Zaklad</code> nově zakládá <strong>skutečné git stromy</strong> (<code>git init</code>, vzor převzatý z <code>test_chip_review.py</code> včetně skipu, když <code>git</code> není na PATH) — hook stav worktree zjišťuje přes <code>git</code>, nad pouhým adresářem by zamítal; <code>TestHook.setUp</code> proto chipům 01 a 02 chystá čistý worktree. <code>zavolej_hook()</code> vytažen na úroveň modulu, aby ho mohla použít i nová třída. <code>chip_gate.py</code> nedotčen, parity test beze změny.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>Brána: <code>python -m unittest discover -s tests -v</code> → <strong>413 testů, 0 selhání</strong> (před chipem 396 → +17). <code>python tools/chip_lint.py</code> → rc 0, 0 chyb, 3 varování (placeholdery v briefech 08/09/12, existovaly už před chipem). Jen stdlib (<code>json</code>, <code>os</code>, <code>re</code>, <code>sys</code>, <code>pathlib</code>, <code>subprocess</code>). Žádný T3. <code>.html</code> k briefu nepřegenerováno (<code>md2html.py --all</code> sahá mimo NÁROK) — dělá orchestrátor po merge.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>14-hook-zamitani.md</code> &middot; CHIP 14 — hook radši ověří něco jiného, než by zamítl</div>
+</body>
+</html>

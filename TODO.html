@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TODO — CHIPS</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="todo-chips">TODO — CHIPS</h1>
+<h2 id="dalsi-krok">Další krok</h2>
+<ul>
+<li>[x] <strong>Absolutní <code>worktree:</code> chápou <code>chip_run</code> a brána opačně</strong> — vyřešeno<br />
+      chipem 24 (2026-07-31): <code>chip_run.cesty()</code> absolutní cestu ctí, jak je<br />
+      zapsaná, stejně jako <code>chip_gate.kde_spustit()</code> i <code>hook.kde_overit()</code>.<br />
+      Relativní zápis se nezměnil (jen jméno adresáře, vedle repa) — na <code>cwd</code><br />
+      nezávisí jen absolutní cesta, u ní ta ochrana nic nekupovala.<br />
+<code>@unittest.expectedFailure</code> z chipu 19 zrušen, sada je čistě zelená.</li>
+<li>[ ] Zostřit hranici T3: „přidání logiky" si chip 01 a 03 vyložily opačně</li>
+<li>[ ] <strong>Brána se blíží limitu?</strong> Na Windows naměřeno ~70 s na běh (692 testů),<br />
+      na Linuxu stejná sada běží ~5 s — nejdřív zjistit, co je na Windows<br />
+      pomalé (git subprocess, antivirus), než vznikne zkratka. Pouští se po každém<br />
+      mergi. Zvážit <code>--rychla</code> variantu pro merge a plnou jen na konci vlny.</li>
+<li>[ ] <strong>Patří <code>.html</code> briefu agentovi, nebo orchestrátorovi?</strong> Chip 23 ho<br />
+      schválně nepřegeneroval („<code>.html</code> k briefu není v Dotčených souborech,<br />
+      patří orchestrátorovi"), chip 25 ho přegeneroval sám. Obě čtení jsou<br />
+      obhajitelná a <code>chip_lint.py</code> ani <code>TEMPLATE.md</code> neříkají které. Rozhodnout<br />
+      a zapsat do metodiky — teď to závisí na tom, koho se zeptáš.</li>
+<li>[ ] <strong><code>--spustit</code> z orchestrátorského shellu potřebuje KRÁTKÝ timeout.</strong><br />
+      Ověřeno na chipu 25 třemi pokusy: spuštění rovnou na pozadí → Claude Code<br />
+      se vyhodnotí jako neinteraktivní a hned skončí (exit 0, nula práce);<br />
+      dlouhý timeout → po vypršení se proces <strong>zabije</strong> i s rozdělanou prací<br />
+      (exit 143). Funguje jen krátký limit, po kterém se běh přesune na pozadí<br />
+      a doběhne. Zapsat do metodiky k <code>--spustit</code>, je to past, ne detail.</li>
+</ul>
+<h2 id="brana">Brána</h2>
+<ul>
+<li>[ ] Marker <code>.chips</code> a <code>CHIPS_DIR</code> zná zatím jen hook — ostatní nástroje chtějí<br />
+<code>--dir</code>. Sjednotit (<code>chip_common</code>), až to začne vadit v praxi.</li>
+<li>[ ] Definovat konkrétní bránu pro cizí pilotní repo (testy / build / smoke)</li>
+<li>[ ] Napojit na existující skill <code>/ship</code> místo duplikace postupu</li>
+</ul>
+<h2 id="nastroje">Nástroje</h2>
+<ul>
+<li>[x] <code>chip_dashboard.py</code>: vizuální kontrola proběhla 2026-07-31 — hlavička,<br />
+      karty po vlnách, log a patička sedí. <strong>Ověřeno jen na zelené větvi:</strong><br />
+      snímek se všemi chipy <code>merged</code> a bez živých worktree nevyrenderuje ani<br />
+      jednu z tříd <code>stav-draft/ready/running/gated/blocked/jiny</code>, <code>varovani</code>,<br />
+<code>zdroj spatne</code>, <code>ul.zmeny</code> a <code>.osa</code> — ty čekají na kontrolu, až poběží<br />
+      ostrý chip (nebo přes fixturu <code>--dir</code>). Vzhled zbytku neviděl nikdo.</li>
+<li>[x] <code>chip_run.py --uklid</code> hlásil úspěch i když <code>git worktree prune</code> nechal<br />
+      v <code>.git/worktrees/</code> mrtvý adresář (git vrací rc 0 i při „Permission<br />
+      denied") — vyřešeno chipem 25 (2026-07-31): úspěch se měří stavem na<br />
+      disku, zbylá metadata se dorazí rekurzivně a jen po ověření <code>gitdir</code>,<br />
+      ať se nesmažou metadata cizího worktree. 24 nakupených adresářů z chipů<br />
+      01–24 smeteno ručně.</li>
+<li>[ ] <code>git_koren()</code> / <code>strom_ke_kontrole()</code> z <code>chip_lint.py</code> přesunout do<br />
+<code>chip_common.py</code>, až je bude potřebovat i jiný nástroj (nález chipu 05).<br />
+<strong>Kandidátů přibývá</strong>: vlastní <code>git_koren</code> má i <code>hook_chip_gate.py</code><br />
+      a <code>chip_dashboard.brief_ve_worktree()</code>.</li>
+</ul>
+<h2 id="overit-v-praxi">Ověřit v praxi</h2>
+<ul>
+<li>[ ] Sedí strop 10–20 issues / ~15 souborů? Pilot běžel na 7–12 issues na chip.</li>
+<li>[ ] Prázdná hodnota ve frontmatteru (<code>stav:</code> bez hodnoty) neaktivuje fallback —<br />
+      nechat, nebo brát jako chybějící klíč? (nález chipu 03, zafixováno testem)</li>
+</ul>
+<h2 id="hotovo">Hotovo</h2>
+<ul>
+<li>[x] Metodika sepsána (<code>docs/metodika.md</code>) — 2026-07-25</li>
+<li>[x] Šablona chip briefu (<code>chips/TEMPLATE.md</code>) — 2026-07-25</li>
+<li>[x] <code>chip_new.py</code>, <code>chip_lint.py</code>, <code>chip_run.py</code>, <code>md2html.py</code> — 2026-07-25</li>
+<li>[x] Záznam konverzace, ze které projekt vznikl — 2026-07-25</li>
+<li>[x] <code>chip_lint.py</code>: existence nárokovaných cest v repu (stav <code>ready</code>),<br />
+      značka <code># nový</code>, vzory rozbalené proti repu — 2026-07-26</li>
+<li>[x] <strong>Pilot na tomhle repu: 6 chipů ve 2 vlnách, 6/6 merged, 0 blocked</strong> — 2026-07-26</li>
+<li>[x] Testy: 0 → 201 (<code>python -m unittest discover -s tests -v</code>) — 2026-07-26</li>
+<li>[x] <code>chip_status.py</code> — přehled chipů, vln a stavů (chip 02) — 2026-07-26</li>
+<li>[x] <code>chip_run.py</code>: <code>--spustit</code> (Claude Code ve worktree) a <code>--stav</code><br />
+      (ready → running), čisté funkce <code>cesty()</code>/<code>zadani()</code> (chip 04) — 2026-07-26</li>
+<li>[x] <code>chip_lint.py</code>: skutečný průnik dvou vzorů + kontrola proti stromu,<br />
+      ve kterém chip pracuje (chip 05, nálezy N1 a N2) — 2026-07-26</li>
+<li>[x] <code>hotove_issues()</code> a <code>prepis_stav()</code> sloučeny do <code>chip_common.py</code> (chip 06) — 2026-07-26</li>
+<li>[x] Spotřeba tokenů změřena: ~80–110 tis. na chip — 2026-07-26</li>
+<li>[x] <strong>Tvrdý hook</strong>: <code>hook_chip_gate.py</code> na PreToolUse zamítne merge chip větve<br />
+      s červenou bránou; ověřeno živým pokusem o merge — 2026-07-26</li>
+<li>[x] <code>chip_gate.py</code> — spustí bránu z briefu (sdílí ji hook i skill) — 2026-07-26</li>
+<li>[x] Skill <code>/chip</code> (<code>.claude/skills/chip/SKILL.md</code>) — 2026-07-26</li>
+<li>[x] <strong>Druhý pilot — cizí repo <code>pilot-repo</code></strong>: 7 chipů zmergováno, 7/7 zelená<br />
+      brána, 0 → 235 testů, 9 nálezů v produkčním kódu, 5 skriptů poprvé<br />
+      importovatelných bez spuštění pipeline, 7 oprav v zápisové cestě PBIP<br />
+      nástroje; hlavní strom prokazatelně nedotčen (manifest 6037 souborů<br />
+      před/po) — 2026-07-26</li>
+<li>[x] <strong>Role reviewera ověřena v praxi</strong>: nezávislý agent s mutačním testováním<br />
+      našel dvakrát to, co brána minula (<code>chip_review.py</code>) — 2026-07-26</li>
+<li>[x] <strong>Vlna 4 — 10 nálezů z externího code review opraveno</strong>: chipy 11–14<br />
+      (chip 10 rozříznut na 13/14 kvůli hustotě zadání), 366 → 413 testů,<br />
+      4/4 zelená brána. Průběh a poučení: <code>docs/vlna-4-preruseno.md</code> — 2026-07-27</li>
+<li>[x] <strong>Hook už nemá falešné poplachy</strong> — <code>merge</code> se hledá jako celý token po<br />
+      tokenu <code>git</code> uvnitř segmentu, ne jako podřetězec. Ověřeno naživo: <code>echo</code>,<br />
+<code>grep</code> i <code>git commit -m</code> s frází o mergi chip větve projdou, skutečný<br />
+      merge se zamítne (chip 13) — 2026-07-27</li>
+<li>[x] <code>strom_ke_kontrole()</code> ověřuje, že nalezený git strom je opravdu tentýž<br />
+      repozitář jako <code>repo:</code> (chip 11, nález #2) — 2026-07-27</li>
+<li>[x] <strong>Složka <code>chips/</code> sjednocena</strong>: 8 briefů převedeno na konvenci větve<br />
+<code>ai/chip-NN/nazev</code>, 6 doplněn slovník stavů, smazán osiřelý HTML — 2026-07-27</li>
+<li>[x] <strong>Úklid worktree vynucen, ne jen doporučen</strong>: <code>--uklid</code> odmítne<br />
+      nezmergovanou větev (<code>merge-base --is-ancestor</code>), opuštěný chip jde<br />
+      uklidit <code>--presto</code>. Pořadí kroků doplněno do <code>/chip</code> i metodiky — 2026-07-28</li>
+<li>[x] <strong><code>--uklid</code> doopravdy uklidí</strong>: <code>remove</code> → <code>remove --force</code> → ruční<br />
+<code>rmtree</code> (sundá read-only) → <code>worktree prune</code>; zbylý adresář končí<br />
+      kódem 1 místo tichého úspěchu. Ověřeno naživo na read-only zbytku — 2026-07-28</li>
+<li>[x] <strong><code>--stav</code> píše do kopie briefu ve worktree</strong>, ne do hlavního stromu —<br />
+      hlavní strom po <code>chip_run.py NN --stav</code> zůstává čistý (<code>git status</code><br />
+      prázdný), merge tedy nemá na čem spadnout — 2026-07-28</li>
+<li>[x] <strong>Vlna 6 — pět chipů naráz</strong>: chipy 19–23, 5/5 merged, 0 zásahů mimo<br />
+      nárok, 523 → 676 testů. Součet po každém mergi seděl<br />
+      (548 → 562 → 585 → 590 → 676) — 2026-07-28</li>
+<li>[x] <strong><code>chip_gate.py</code> měří worktree chipu, ne hlavní strom</strong> — chybějící<br />
+<code>worktree:</code> selže místo tichého fallbacku; <code>--repo</code> zůstává vědomou<br />
+      výjimkou. <code>test_brana_a_hook_resi_worktree_stejne</code> hlídá, že se CLI<br />
+      a hook nerozejdou ve verdiktu (chip 19) — 2026-07-28</li>
+<li>[x] <strong><code>md2html.py</code> bere vstup jako text, ne jako HTML</strong> — extension<br />
+<code>BezSurovehoHTML</code>, bez nové závislosti; <code>--all</code> přeskakuje <code>__pycache__</code>.<br />
+      Regresní důkaz: 28 z 29 <code>.html</code> bajtově shodných, <code>TEMPLATE.html</code> se mění<br />
+      o jeden řádek (zástupný text <code>&lt;název&gt;</code> byl dosud neviditelný — druhá,<br />
+      skrytá instance téže vady). Změna přijata uživatelem (chip 20) — 2026-07-28</li>
+<li>[x] <strong><code>chip_review.py</code> rozlišuje nález, otázku a data</strong> — o druhu rozhoduje<br />
+      místo vzniku, ne formátování. Na chipu 17: dřív 1 nález (a byl planý),<br />
+      dnes 0 nálezů + 1 otázka (chip 21) — 2026-07-28</li>
+<li>[x] <strong>Slovník stavů je v generovaném briefu</strong>, ne jen v metodice — ve<br />
+      frontmatteru šablony, s větou, že <code>stav:</code> přepíná orchestrátor. Zrušen<br />
+      duplicitní inline seznam. Test porovnává šablonu s <code>chip_common.STAVY</code><br />
+      (chip 22) — 2026-07-28</li>
+<li>[x] <strong><code>chip_dashboard.py</code></strong> — živá deska z worktree a gitu, <code>--watch</code>,<br />
+      offline HTML. Doložila sama sebe: nad pěti běžícími chipy 177/192 issues<br />
+      proti 140/192 z hlavního stromu. <code>dashboard.html</code> do <code>.gitignore</code><br />
+      (chip 23) — 2026-07-28</li>
+<li>[x] <strong>Vlna 5 — první vlna odbavená subagenty místo oken</strong>: chipy 16–18,<br />
+      3/3 merged, 0 zásahů mimo nárok, 454 → 523 testů. Součet po každém mergi<br />
+      seděl (476 → 496 → 523), tedy nulová kolize mezi chipy — 2026-07-28</li>
+<li>[x] <strong><code>chip_run.py --od &lt;ref&gt;</code></strong> — navazující chip se větví z předchůdce;<br />
+      ref ověřen (<code>rev-parse --verify …^{commit}</code>) PŘED <code>worktree add</code>, zadání<br />
+      pro agenta říká, že cizí rozpracovaný kód se needituje (chip 16) — 2026-07-28</li>
+<li>[x] <strong>Greenfield</strong>: <code>chip_run.py --zaloz-repo</code> (init + prázdný kořenový<br />
+      commit, nad existující historií nedělá nic) + <code>greenfield: ano</code> ve<br />
+      frontmatteru, se kterým lint neexistenci repa a cest jen varuje.<br />
+      Kontrola tvaru cesty se nevypíná — je vstupem do disjunktnosti<br />
+      (chipy 16 a 17) — 2026-07-28</li>
+<li>[x] <strong><code>chip_lint</code>: navazující chip je varování, ne chyba</strong> — předek <code>gated</code><br />
+      pustí a připomene pořadí merge; <code>blocked</code> a nehotový předek zůstávají<br />
+      chyba (chip 17) — 2026-07-28</li>
+<li>[x] <strong><code>md2html.py</code> dostal první testy</strong> — 27 testů, včetně kontroly, že sada<br />
+      nesáhne na <code>.html</code> ve skutečném repu; <code>main()</code> vrací 1 při chybějícím<br />
+      souboru (chip 18) — 2026-07-28</li>
+<li>[x] <strong>Hook najde briefy i mimo repo</strong> — marker <code>.chips</code> a ověřený <code>CHIPS_DIR</code><br />
+      vedle adresáře <code>chips/</code>. Konec dilematu „tvrdá brána NEBO nulová stopa<br />
+      v cizím repu"; rozbitý marker zamítá místo mlčení. Ověřeno naživo:<br />
+      stejný červený merge bez markeru prošel, s markerem zamítnut — 2026-07-28</li>
+</ul>
+<div class="doc-foot">Vygenerováno z <code>TODO.md</code> &middot; TODO — CHIPS</div>
+</body>
+</html>

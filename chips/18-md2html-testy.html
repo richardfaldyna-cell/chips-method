@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 18 — md2html.py je jediný nástroj bez jediného testu</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 18<br />
+nazev: md2html-testy<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-18/md2html-testy<br />
+worktree: ../CHIPS-chip-18</p>
+<hr />
+<h1 id="chip-18-md2htmlpy-je-jediny-nastroj-bez-jedineho-testu">CHIP 18 — md2html.py je jediný nástroj bez jediného testu</h1>
+<p>Sada 454 testů je to, co v tomhle projektu drží bránu poctivou. <code>md2html.py</code><br />
+z ní vypadl: nemá <strong>žádný</strong> vlastní test, přitom se pouští před každým commitem<br />
+(<code>--all</code>) a přepisuje desítky souborů v repu. Tichý regres v něm se pozná až<br />
+tím, že je HTML rozbité — tedy nejspíš vůbec.</p>
+<p>Chip je záměrně jen o testech a o tom, co se při jejich psaní ukáže. <strong>Není to<br />
+chip na přepsání md2html.py.</strong></p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>convert()</code> nad dočasným <code>.md</code> vytvoří <code>.html</code> <strong>vedle něj</strong> a vrátí<br />
+      jeho cestu</li>
+<li>[x] #2 — výstup je samostatný soubor: obsahuje vložené CSS a <strong>žádný odkaz<br />
+      na externí zdroj</strong> (offline je celý smysl nástroje)</li>
+<li>[x] #3 — diakritika (<code>ěščřžýáíé</code>) přežije převod v UTF-8</li>
+<li>[x] #4 — text mimo markdown se escapuje; <code>&lt;script&gt;</code> v <code>.md</code> se do HTML<br />
+      nedostane jako živý tag</li>
+<li>[x] #5 — <code>&lt;title&gt;</code> odpovídá zdroji (název souboru / první nadpis), ať jde<br />
+      výstup poznat v záložce prohlížeče</li>
+<li>[x] #6 — tabulka a blok kódu se převedou (obojí je v každém dokumentu<br />
+      projektu, takže regres by byl vidět všude)</li>
+<li>[x] #7 — <code>main()</code> s cestou k souboru: převede ho a skončí kódem 0</li>
+<li>[x] #8 — <code>main()</code> s neexistujícím souborem: <strong>nespadne tracebackem</strong>, ale<br />
+      hlásí a končí nenulovým kódem (dnešní chování ověř a zafixuj testem;<br />
+      pokud padá, oprav — tohle je jediná povolená změna chování)</li>
+<li>[x] #9 — <code>--all</code> převádí <code>.md</code> v projektu a <strong>přeskakuje</strong> <code>.git</code><br />
+      a <code>__pycache__</code>; ověř na dočasném stromu, ne na skutečném repu</li>
+<li>[x] #10 — žádný test nesmí zapsat do skutečného repa ani spustit <code>--all</code> nad<br />
+<code>ROOT</code> — všechno v <code>tempfile</code></li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/md2html.py
+tests/test_md2html.py      # nový
+</code></pre>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>tests/test_md2html.py</code> existuje a <code>python -m unittest discover -s tests</code><br />
+      projde; testů je <strong>víc</strong> než dnešních 454</li>
+<li>[x] <code>git status --porcelain</code> po celém běhu sady je <strong>prázdný</strong> — testy<br />
+      nesmějí přepsat žádný <code>.html</code> v repu (to je hlavní riziko tohohle chipu)</li>
+<li>[x] každý bod z Issues má svůj test (název testu ať jde spárovat s číslem)</li>
+<li>[x] <code>python tools/md2html.py --all</code> dál funguje a vypíše převedené soubory</li>
+<li>[x] pokud se <code>md2html.py</code> měnil, změna je <strong>jen</strong> oprava pádu z #8 —<br />
+      formátování ani CSS se nepřepisuje</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Zastav se, zapiš do Logu a nech na uživateli:</p>
+<ul>
+<li><strong>jakákoli změna CSS nebo tvaru výstupu</strong> — přegenerovalo by to všechny<br />
+<code>.html</code> v repu a diff by se nedal přečíst</li>
+<li>přechod na jiný markdown engine nebo nová závislost</li>
+<li>jakýkoli zásah mimo „Dotčené soubory"</li>
+<li>nález, že <code>--all</code> sahá i jinam, než by měl (zapiš, neopravuj — je to změna<br />
+  chování nástroje, který právě běží nad celým repem)</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testy: <code>python -m unittest discover -s tests -v</code>, stdlib <code>unittest</code>, <strong>žádný<br />
+  pytest</strong>. Vlastní <code>tempfile</code> fixture, úklid po sobě.</li>
+<li><code>md2html.py</code> je jediný nástroj se <strong>závislostí</strong> (<code>markdown</code>) — je<br />
+  nainstalovaná, importuj normálně.</li>
+<li><code>ROOT</code> v modulu ukazuje na kořen projektu. Testy <code>--all</code> pouštěj tak, aby na<br />
+<code>ROOT</code> nesáhly (monkeypatch <code>md2html.ROOT</code> na <code>tempfile</code> adresář).</li>
+<li>Nález v cizím kódu se <strong>neopravuje</strong>, zapisuje se do Logu. U testu, který<br />
+  dokumentuje vadu, použij <code>@unittest.expectedFailure</code> s komentářem — výjimkou<br />
+  je bod #8, kde je oprava součástí zadání.</li>
+<li>Konvence: ke každému <code>.md</code> v repu patří <code>.html</code>; generuje se právě tímhle<br />
+  nástrojem. Přegenerování před commitem dělá orchestrátor, ne ty.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-28</td>
+<td>ready</td>
+<td>brief založen orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><code>tests/test_md2html.py</code> založen — 27 nových testů, sada 454 → 481, lint rc 0. <code>git status --porcelain</code> po celém běhu sady hlásí jen soubory, které jsem vědomě měnil (žádný <code>.html</code> v repu se nesáhl).</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Jediná změna <code>md2html.py</code> je bod #8: <code>main()</code> vrací <code>int</code> (1 při chybějícím souboru), <code>__main__</code> volá <code>sys.exit(main())</code>. Text výstupu, CSS ani <code>TEMPLATE</code> se nesáhly — <code>--all</code> na repu vyprodukoval bajtově shodné <code>.html</code>. Původní chování: chybějící soubor tracebackem nepadal, ale končil nulou; to bylo to, co bylo potřeba zafixovat.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>NÁLEZ #4 (neopraveno, eskalace):</strong> <code>markdown.markdown()</code> pouští surové HTML skrz — <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> ve zdrojovém <code>.md</code> skončí ve výstupu jako živý tag. Zbytek #4 platí (text mimo markdown i titulek/patička se escapují). Test <code>test_04_script_v_markdownu_se_nedostane_jako_zivy_tag</code> je <code>@unittest.expectedFailure</code>. Oprava (např. rozšíření <code>EXT</code>, sanitizace) mění tvar výstupu → přegenerovala by všechny <code>.html</code> v repu, tedy T3. Bod #4 nechávám nezaškrtnutý.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>NÁLEZ #9 (neopraveno, eskalace):</strong> filtr v <code>--all</code> zná jen <code>.git</code> (<code>if ".git" not in p.parts</code>), <code>__pycache__</code> nepřeskakuje. Praktická škoda je nulová (<code>.md</code> se v <code>__pycache__</code> nevyskytne), ale neodpovídá to zadání. Test <code>test_09_all_preskakuje_pycache</code> je <code>@unittest.expectedFailure</code>; přeskakování <code>.git</code> ověřeno a funguje. Rozšíření filtru je změna chování nástroje běžícího nad celým repem → T3. Bod #9 nechávám nezaškrtnutý.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Poznámka pro orchestrátora: <code>chips/18-md2html-testy.html</code> je po zápisu Logu neaktuální — přegenerování (<code>md2html.py --all</code>) je podle briefu na orchestrátorovi, do commitu chipu jsem ho nedal. Commitnuty jsou jen <code>tools/md2html.py</code> a <code>tests/test_md2html.py</code> (+ tenhle brief).</td>
+</tr>
+<tr>
+<td>2026-09-24</td>
+<td>merged</td>
+<td>Orchestrátor: #4 a #9 dotáhl chip 20 (escape surového HTML, <code>IGNOROVANE_ADRESARE</code> s <code>__pycache__</code>), <code>expectedFailure</code> u obou testů je pryč a testy jsou zelené — odškrtnuto dodatečně, ať přehled neukazuje 8/10 u hotového chipu.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>18-md2html-testy.md</code> &middot; CHIP 18 — md2html.py je jediný nástroj bez jediného testu</div>
+</body>
+</html>

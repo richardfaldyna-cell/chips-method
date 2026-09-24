@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metodika CHIPS</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="metodika-chips">Metodika CHIPS</h1>
+<p>Postup pro paralelní vývoj s AI agenty. Cílem není rychlost — cílem je, aby<br />
+paralelizace <strong>nezhoršila kvalitu</strong> oproti sériové práci.</p>
+<hr />
+<h2 id="1-slovnik">1. Slovník</h2>
+<table>
+<thead>
+<tr>
+<th>Pojem</th>
+<th>Význam</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>chip</strong></td>
+<td>uzavřený balíček práce: seznam issues + hranice + definition of done</td>
+</tr>
+<tr>
+<td><strong>okno</strong></td>
+<td>samostatná Claude Code session s vlastním kontextem a limity</td>
+</tr>
+<tr>
+<td><strong>orchestrátor</strong></td>
+<td>hlavní smyčka v okně; rozděluje práci subagentům a merguje</td>
+</tr>
+<tr>
+<td><strong>subagent</strong></td>
+<td>vedlejší instance s izolovaným kontextem (Agent tool)</td>
+</tr>
+<tr>
+<td><strong>brána</strong></td>
+<td>automatická kontrola, bez které se nesmí mergovat</td>
+</tr>
+<tr>
+<td><strong>T3</strong></td>
+<td>rozhodnutí, které chip nesmí udělat sám (viz §6)</td>
+</tr>
+</tbody>
+</table>
+<p>Pozor na vrstvy — pletou se:</p>
+<pre><code>ty  ──►  chip brief  ──►  okno (orchestrátor)  ──►  subagenti  ──►  brána  ──►  merge
+         soubor            session                  Agent tool      testy
+</code></pre>
+<hr />
+<h2 id="2-rezani-prace-na-chipy">2. Řezání práce na chipy</h2>
+<p><strong>Jediné kritérium je disjunktnost souborů.</strong> Ne stáří issues, ne priorita, ne<br />
+téma. Dva chipy, které sáhnou na stejný soubor, se srazí — a to bez ohledu na to,<br />
+jak dobře jsou popsané.</p>
+<p>Postup:</p>
+<ol>
+<li><strong>Vypiš issues</strong> a u každé odhadni, které soubory změní.<br />
+   U nejasných to zjisti (grep, přečti issue) — hádání se tady nevyplácí.</li>
+<li><strong>Seskup podle souborů</strong>, ne podle témat. Issues sahající na stejný modul<br />
+   patří do jednoho chipu, i když spolu tematicky nesouvisí.</li>
+<li><strong>Ověř disjunktnost</strong> — <code>python tools/chip_lint.py</code> projde všechny briefy<br />
+   a nahlásí soubor, který si nárokují dva chipy.</li>
+<li><strong>Co nejde rozřezat, nechej sériově.</strong> Když se tři čtvrtiny issues perou o<br />
+   jeden centrální soubor, paralelizace ti nepomůže. Udělej ten soubor jako<br />
+   chip #1 a ostatní pusť až po jeho merge.</li>
+</ol>
+<h3 id="jak-psat-narok-na-soubory">Jak psát nárok na soubory</h3>
+<p>Cesty v sekci „Dotčené soubory" jsou <strong>relativní k <code>repo:</code></strong> z frontmatteru.<br />
+Absolutní cesta nebo <code>..</code> je chyba — nárok pak nejde porovnat s ostatními chipy.</p>
+<table>
+<thead>
+<tr>
+<th>Zápis</th>
+<th>Význam</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/parser.py</code></td>
+<td>konkrétní soubor, musí v repu existovat</td>
+</tr>
+<tr>
+<td><code>src/</code></td>
+<td>celý adresář včetně podstromu</td>
+</tr>
+<tr>
+<td><code>src/report_*.py</code></td>
+<td>vzor; pro kontrolu kolizí se rozbalí na skutečné soubory</td>
+</tr>
+<tr>
+<td><code>src/nove.py  # nový</code></td>
+<td>soubor, který chip teprve vytvoří — kontrola existence se přeskočí</td>
+</tr>
+</tbody>
+</table>
+<p>Ve stavu <code>ready</code> lint ověřuje, že nárokované cesty v repu <strong>opravdu existují</strong>.<br />
+Nárok na neexistující soubor je buď překlep, nebo zastaralý brief — a v obou<br />
+případech je řez chipu postavený na něčem, co tam není. Značka <code># nový</code> je<br />
+jediná výjimka a je záměrně explicitní: musíš ji napsat, ne na ni spoléhat.</p>
+<blockquote>
+<p>Vzor pokrývá i soubory, které teprve vzniknou. <code>src/*.py</code> v jednom chipu tedy<br />
+koliduje s <code>src/nove.py  # nový</code> v druhém, i když ten soubor zatím neexistuje.</p>
+</blockquote>
+<h3 id="zavislosti-a-vlny">Závislosti a vlny</h3>
+<p>Disjunktnost souborů nestačí, když jeden chip staví základ, na kterém ostatní<br />
+teprve mohou začít (kostra repa, číselníky, na které se migrace odkazují).<br />
+K tomu slouží <code>zavisi_na:</code> ve frontmatteru — seznam chipů, které musí být<br />
+<code>merged</code> dřív.</p>
+<p>Chipy se stejnou hloubkou závislostí tvoří <strong>vlnu</strong> a pouštějí se paralelně:</p>
+<pre><code>vlna 0:  00                    ← sériově, blokuje vše
+vlna 1:  01                    ← základ pro migrace
+vlna 2:  02  03  04  07  09    ← paralelně, nezávislé
+vlna 3:  05  06  08  10        ← staví na vlně 2
+</code></pre>
+<p><code>chip_lint.py</code> hlídá, že závislost existuje, není cyklická a že běžící chip má<br />
+předky ve stavu <code>merged</code>. <strong>Šířka vlny, ne počet chipů, určuje, kolik oken má<br />
+smysl pustit</strong> — deset chipů ve čtyřech vlnách znamená nejvýš pět oken naráz.</p>
+<h3 id="strop-chipu">Strop chipu</h3>
+<table>
+<thead>
+<tr>
+<th>Metrika</th>
+<th>Doporučení</th>
+<th>Proč</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>issues</td>
+<td>10–20</td>
+<td>víc se nevejde do jednoho kontextu</td>
+</tr>
+<tr>
+<td>dotčené soubory</td>
+<td>~15</td>
+<td>nad tím roste šance kolize s jiným chipem</td>
+</tr>
+<tr>
+<td>doba běhu</td>
+<td>pár hodin</td>
+<td>delší běh = větší ztráta při selhání</td>
+</tr>
+<tr>
+<td><strong>nezávislé opravy s důkazem</strong></td>
+<td><strong>~2–3</strong></td>
+<td>čtyři narazí na strop jedné odpovědi</td>
+</tr>
+</tbody>
+</table>
+<p>Když strop nesedí, chip rozřež. Dva menší chipy jsou vždycky lepší než jeden,<br />
+který nedojede.</p>
+<p><strong>Vedle spotřeby existuje druhá mez: hustota zadání.</strong> Spotřeba (~100 tis.<br />
+tokenů na chip) se hlídá sama a projeví se varováním. Hustota ne — chip se<br />
+čtyřmi nezávislými opravami, ke každé regresní důkaz, narazí na limit <strong>jedné<br />
+odpovědi</strong> a spadne bez varování uprostřed práce (chip 10, vlna 4).</p>
+<p><strong>Řež podle povahy práce, ne podle počtu issues.</strong> Chip 10 se dělil na „odkud<br />
+nástroj bere vstup" (parsování) a „kdy má zamítnout" (rozhodovací pravidla) —<br />
+ne na „první dva nálezy" a „druhé dva". Mechanické dělení nutí agenta přepínat<br />
+mezi dvěma způsoby uvažování uvnitř jednoho chipu, což je právě ta hustota,<br />
+kvůli které se řeže.</p>
+<p><strong>Pozor na pojmenování rozřezaných chipů.</strong> Očekávaná volba <code>10a</code>/<code>10b</code> by<br />
+tady rozbila bránu: hook i <code>chip_gate</code> matchují číslo chipu jako <code>(\d+)</code>,<br />
+takže větev <code>ai/chip-10a/…</code> se rozpozná jako <strong>chip 10</strong> a ověří se cizí brief.<br />
+Nová čísla na konci řady jsou bezpečnější — pojmenování se přizpůsobí nástroji,<br />
+protože nástroj je vynucovací bod.</p>
+<hr />
+<h2 id="3-izolace-worktree-ne-slozka">3. Izolace: worktree, ne složka</h2>
+<p>Nejčastější chyba je pustit N session nad stejným working tree. Výsledkem nejsou<br />
+git konflikty (ty bys aspoň viděl), ale <strong>tiše ztracené změny</strong> — dvě session<br />
+načtou soubor, obě ho zapíšou, druhý zápis přemaže první.</p>
+<p>Řešení je <code>git worktree</code>: jeden repozitář, N nezávislých checkoutů.</p>
+<pre><code class="language-bash">git worktree add ../repo-chip-01 -b ai/chip-01/refaktor-parseru
+</code></pre>
+<p>Každé okno pracuje ve své složce, na své větvi, s vlastním indexem. Merguje se<br />
+až na konci a případný konflikt řeší git normálně a viditelně.</p>
+<p>Claude Code na to má <code>EnterWorktree</code> (pro session) a subagenti parametr<br />
+<code>isolation: "worktree"</code>. <code>tools/chip_run.py</code> to udělá za tebe.</p>
+<p><strong>Navazující chip se větví z předchůdce, ne z HEAD.</strong> Když chip B staví na<br />
+práci chipu A, která ještě není zmergovaná, vzalo by mu větvení z HEAD přesně<br />
+to, na čem má stavět:</p>
+<pre><code class="language-bash">python tools/chip_run.py 02 --od ai/chip-01/zaklad
+</code></pre>
+<p>Agent takového chipu dostane v zadání navíc větu, že pod jeho prací leží cizí<br />
+rozpracovaný kód — <strong>needituje ho ani neopravuje</strong>, nález v něm patří do Logu.<br />
+Bez toho by nedodělaný kód předchůdce považoval za součást hlavní větve a<br />
+„spravil" ho, čímž by vyrobil právě tu kolizi mezi balíčky, kvůli které chipy<br />
+existují. Lint navazující dvojici pustí a jen připomene pořadí merge —<br />
+předek <code>gated</code> je varování, <code>blocked</code> nebo nehotový předek zůstává chyba.</p>
+<p><strong>Greenfield: první chip v projektu, který ještě není.</strong> V čerstvě <code>init</code>nutém<br />
+repu není <code>HEAD</code>, ze kterého by <code>worktree add</code> větvil, a lint padá na<br />
+neexistujícím repu i na nárokovaných cestách. Obojí se řeší vědomým<br />
+prohlášením, ne měkčím defaultem:</p>
+<pre><code class="language-yaml">greenfield: ano      # ve frontmatteru briefu — repo teprve vznikne
+</code></pre>
+<pre><code class="language-bash">python tools/chip_run.py 01 --zaloz-repo    # git init + prázdný kořenový commit
+</code></pre>
+<p>Nad repem, které už historii má, <code>--zaloz-repo</code> <strong>nedělá nic</strong> a řekne to;<br />
+<code>greenfield: ano</code> se tam hlásí jako zastaralý příznak k smazání. Kontrola<br />
+<em>tvaru</em> cesty (relativní, bez <code>..</code>) se nevypíná ani s příznakem — je vstupem<br />
+do porovnání disjunktnosti, takže měkčit ji by znamenalo měkčit disjunktnost.</p>
+<blockquote>
+<p><strong>Úklid:</strong> <code>python tools/chip_run.py 01 --uklid</code> — <strong>až po mergi</strong>, jinak se<br />
+ti nasbírají desítky mrtvých checkoutů. Nezmergovanou větev nástroj uklidit<br />
+odmítne (viz níž); vědomé opuštění chipu je <code>--uklid --presto</code>.</p>
+</blockquote>
+<p>Worktree není jen pracovní složka, je to <strong>jediné místo, kde jde spustit brána</strong><br />
+chipu. Proto s ním nástroje zacházejí jako se stromem, který v dané fázi vlastní<br />
+někdo jiný:</p>
+<table>
+<thead>
+<tr>
+<th>Fáze</th>
+<th>Kdo do worktree píše</th>
+<th>Co do hlavního stromu NESMÍ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>před spuštěním</td>
+<td><code>chip_run.py</code> (založí, přepíše <code>stav:</code>)</td>
+<td>nic — hlavní strom zůstává čistý</td>
+</tr>
+<tr>
+<td>běh chipu</td>
+<td>agent (kód, Log, checkboxy)</td>
+<td>agent do hlavního stromu nesahá vůbec</td>
+</tr>
+<tr>
+<td>merge</td>
+<td>git</td>
+<td>—</td>
+</tr>
+<tr>
+<td>po mergi</td>
+<td><code>chip_run.py --uklid</code> (smaže)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Odtud plyne i to, <strong>kterou kopii briefu smí <code>--stav</code> přepsat</strong>: tu ve worktree,<br />
+ne v hlavním stromě. Brief je verzovaný soubor, takže ho worktree má vlastní —<br />
+a zápis do hlavního stromu by tam nechal necommitnutou změnu souboru, který<br />
+merge přepisuje. <code>git merge</code> takový merge odmítne (<code>Your local changes … would
+be overwritten</code>). Pravidlo „nesahej na brief běžícího chipu" platí i pro<br />
+nástroje, ne jen pro lidi.</p>
+<hr />
+<h2 id="4-brana-kde-se-rozhoduje-o-kvalite">4. Brána: kde se rozhoduje o kvalitě</h2>
+<p>Věta „buď důsledný a vše pečlivě zkontroluj" nemá žádnou vynucovací sílu. Je to<br />
+přání. Sílu má jen něco, co <strong>selže samo od sebe</strong>, když je něco špatně.</p>
+<p>Brána = posloupnost příkazů, které musí projít, jinak se nemerguje:</p>
+<pre><code class="language-bash">pytest -q                    # testy
+python -m build              # build
+python smoke_test.py         # smoke test proti reálným datům
+</code></pre>
+<p>Tři úrovně vynucení, od nejslabší po nejsilnější:</p>
+<table>
+<thead>
+<tr>
+<th>Úroveň</th>
+<th>Mechanismus</th>
+<th>Dá se obejít?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>instrukce v promptu</td>
+<td>„zkontroluj to"</td>
+<td>ano, i nechtěně</td>
+</tr>
+<tr>
+<td>skill (<code>/chip</code>, <code>/ship</code>)</td>
+<td>postup, který si agent načte</td>
+<td>ano, když ho nezavolá</td>
+</tr>
+<tr>
+<td><strong>hook</strong></td>
+<td>harness spustí sám před merge</td>
+<td><strong>ne</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Třetí úroveň je od 2026-07-26 postavená: <code>tools/hook_chip_gate.py</code> visí na<br />
+PreToolUse a <strong>zamítne <code>git merge</code> chip větve, dokud brána není zelená</strong>.<br />
+Nemá vlastní seznam příkazů — vezme sekci „Ověření (brána)" z briefu toho<br />
+chipu, jehož větev se merguje. Vynucuje tedy přesně to, co si chip sám slíbil,<br />
+a funguje v libovolném repu.</p>
+<p>Aby neotravoval jinde, je rozsah úzký — hook se ozve jen když platí všechno:<br />
+příkaz spouští <code>git merge</code>, mergovaná větev je <code>ai/chip-NN/...</code> (nebo starší<br />
+<code>chip/NN-...</code>) a u cílového repa jdou najít chip briefy. Jinak mlčky pustí dál.</p>
+<p><strong>Briefy nemusí ležet v repu.</strong> Dokud byl jediným signálem adresář <code>chips/</code>,<br />
+vylučovaly se dvě věci, které se vylučovat nemají: tvrdá brána a nulová stopa<br />
+v cizím repu. Kdo dal briefy stranou (<code>--dir</code>, typicky klientské repo), dostal<br />
+hook, který <strong>mlčky pouštěl červené merge</strong> — a brána vypadala, že funguje.<br />
+Signály jsou proto tři, od nejkonkrétnějšího k nejobecnějšímu:</p>
+<table>
+<thead>
+<tr>
+<th>Signál</th>
+<th>Kdy platí</th>
+<th>Pro co je</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chips/</code> v repu</td>
+<td>adresář existuje</td>
+<td>výchozí případ, vlastní projekty</td>
+</tr>
+<tr>
+<td>marker <code>.chips</code></td>
+<td>soubor existuje; první neprázdný řádek je cesta k briefům</td>
+<td>repo, kde po metodice nesmí zůstat stopa</td>
+</tr>
+<tr>
+<td>env <code>CHIPS_DIR</code></td>
+<td>ukazuje na briefy <strong>tohoto</strong> repa (<code>repo:</code>)</td>
+<td>session nad jedním projektem</td>
+</tr>
+</tbody>
+</table>
+<p>Marker stačí netrackovat (<code>.git/info/exclude</code>) — jeden dotfile je stopa, se<br />
+kterou se dá žít i v cizím repu; adresář s desítkou briefů ne. A protože marker<br />
+nikdo nezaloží omylem, <strong>rozbitý marker zamítá</strong> místo aby mlčel: překlep<br />
+v cestě by jinak vypnul bránu přesně tam, kde si ji uživatel výslovně přál.</p>
+<p>U <code>CHIPS_DIR</code> je to obráceně — je to globální proměnná, ne přihláška konkrétního<br />
+repa. Přijme se jen tehdy, když v ní leží brief hlásící se k tomuhle repu; jinak<br />
+by proměnná nastavená kvůli projektu A rozhodovala o merge v projektu B.</p>
+<p><strong>Větev se bere z argumentu za <code>merge</code>, ne odkudkoli z příkazu.</strong> Složený<br />
+příkaz <code>git branch -d ai/chip-04/x &amp;&amp; git merge ai/chip-05/y</code> by jinak nechal<br />
+ověřit bránu chipu 04 a pustil merge chipu 05. Totéž platí pro <code>git -C</code> — bere<br />
+se jen ten, který patří samotnému mergi. U octopus merge (<code>git merge A B</code>) musí<br />
+projít brána <strong>každé</strong> větve.</p>
+<p><strong>Když bránu není kde ověřit, hook zamítá</strong> — neověřuje náhradní strom:</p>
+<table>
+<thead>
+<tr>
+<th>Situace</th>
+<th>Proč zamítnout</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>worktree chipu neexistuje</td>
+<td>brána v hlavním stromě by ověřila kód <strong>bez změn chipu</strong> a vrátila falešnou zelenou</td>
+</tr>
+<tr>
+<td>ve worktree jsou necommitnuté změny</td>
+<td>merge bere commitnutý tip, brána by tedy měřila jiný stav, než jaký se merguje</td>
+</tr>
+<tr>
+<td>stav worktree nejde zjistit</td>
+<td>nevědět, co ve stromě je, se pro potřeby brány rovná nemít ho</td>
+</tr>
+</tbody>
+</table>
+<p>Praktický důsledek: <strong>úklid worktree patří až po mergi.</strong> Kdo uklidí dřív,<br />
+nemerguje — a jediná cesta ven je obejít vlastní bránu. Proto to není jen<br />
+doporučení: <code>chip_run.py NN --uklid</code> nezmergovanou větev uklidit <strong>odmítne</strong><br />
+(<code>merge-base --is-ancestor</code>, takže projde i fast-forward). Opuštěný chip se<br />
+uklízí vědomě přes <code>--uklid --presto</code>.</p>
+<p>Ručně tutéž bránu spustíš <code>python tools/chip_gate.py NN</code> — <strong>taky ve worktree<br />
+chipu</strong>, ne v hlavním stromě. Do 2026-07-28 to CLI dělalo obráceně a tiše:<br />
+brána chipu 18 hlásila zelenou nad hlavním stromem se 454 testy, zatímco ve<br />
+worktree jich bylo 481. Rozdíl 27 testů byla přesně ta práce, o které měla<br />
+brána rozhodovat. Když <code>worktree:</code> chybí nebo není vyplněný, nástroj dnes<br />
+<strong>selže</strong> — tichý fallback na hlavní strom byl celá ta vada.</p>
+<p><strong>Za běhu vlny ti <code>chip_status.py</code> lže.</strong> Čte briefy v hlavním stromě, kde se<br />
+za běhu chipu nehýbe nic — checkboxy i soubory se mění ve worktree. Živý stav<br />
+dává <code>python tools/chip_dashboard.py</code>: čte z worktree každého chipu a z gitu,<br />
+tedy z tvrdých zdrojů, ne z toho, co agent napsal do souhrnu. Při vlně 6 byl<br />
+rozdíl 37 odškrtnutých issues a pět stavů.</p>
+<p><strong>Když brána selže, chip nekončí mergem, ale otevřeným PR.</strong> To je celý rozdíl<br />
+mezi „autonomní" a „bez dohledu".</p>
+<hr />
+<h2 id="5-definition-of-done">5. Definition of done</h2>
+<p>Musí jít ověřit příkazem, ne názorem. Test:</p>
+<table>
+<thead>
+<tr>
+<th>❌ neměřitelné</th>
+<th>✅ měřitelné</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>„parser je zrefaktorovaný"</td>
+<td>„<code>pytest tests/test_parser.py</code> projde, <code>parser.py</code> &lt; 300 řádků"</td>
+</tr>
+<tr>
+<td>„kód je čistší"</td>
+<td>„<code>ruff check</code> bez nálezů"</td>
+</tr>
+<tr>
+<td>„funguje to"</td>
+<td>„smoke test na <code>data/sample.xlsx</code> vrátí 42 řádků"</td>
+</tr>
+</tbody>
+</table>
+<p>Když DoD nejde napsat jako příkaz, chip ještě není připravený k puštění.</p>
+<h3 id="meritelna-silna">Měřitelná ≠ silná</h3>
+<p>Příkaz je nutná podmínka, ne dostatečná. <strong>Doda ve tvaru „nástroj vrátí 0 chyb"<br />
+je slabá, pokud nedokazuje, že kontrola vůbec proběhla.</strong> Chip 11 měl v DoD<br />
+„lint nad ERP-CHIPS vrátí 0 chyb"; vracel je i před opravou, protože všech<br />
+11 briefů je ve stavu <code>draft</code> a kontrola cest se na ně nespouští. Agent to<br />
+odhalil sám a nahradil přímým měřením návratové hodnoty opravené funkce.</p>
+<p>Test síly: <strong>prošla by tahle DoD i na rozbité verzi?</strong> Když ano, měří přítomnost<br />
+nástroje, ne chování. Silná DoD porovnává <strong>konkrétní hodnotu před a po</strong>, ne<br />
+exit kód.</p>
+<hr />
+<h2 id="6-eskalace-co-chip-nesmi-rozhodnout-sam">6. Eskalace — co chip nesmí rozhodnout sám</h2>
+<p>Označ dopředu, co je <strong>T3</strong> (kritické). Typicky:</p>
+<ul>
+<li>změna veřejného API nebo formátu dat</li>
+<li>migrace schématu / nevratná operace nad daty</li>
+<li>cokoliv v <code>patients/</code> (citlivá data) a firemních projektech</li>
+<li>nová závislost, změna licence</li>
+<li>bezpečnostní rozhodnutí</li>
+</ul>
+<p>Když chip narazí na T3, <strong>zastaví se a otevře PR s otázkou</strong>. Nehádá, nehlasuje.</p>
+<h3 id="proc-ne-at-se-poradi-s-jinym-modelem">Proč ne „ať se poradí s jiným modelem"</h3>
+<p>Láká to: při nejistotě nechat rozhodnout Codex/Gemini/Grok a jet dál. Nefunguje<br />
+to, protože:</p>
+<ul>
+<li>ty modely <strong>nevidí tvoje repo, historii ani dřívější rozhodnutí</strong>;</li>
+<li>shoda tří modelů není pravda, ale průměr tří dohadů;</li>
+<li>výsledek se pak zmerguje <strong>bez tvého vědomí</strong> — nejistota zmizela z logu.</li>
+</ul>
+<p>Druhý názor v kódu jsou <strong>testy a build</strong>, ne další model. Cross-model konzultace<br />
+má smysl na <em>návrh</em> (než se začne psát), ne jako náhrada tvého rozhodnutí.</p>
+<hr />
+<h2 id="7-zivotni-cyklus-chipu">7. Životní cyklus chipu</h2>
+<pre><code>draft ──► ready ──► running ──► gated ──┬─► merged
+                                        └─► blocked (PR + otázka)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Stav</th>
+<th>Znamená</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>draft</code></td>
+<td>brief se píše, hranice ještě nejsou jisté</td>
+</tr>
+<tr>
+<td><code>ready</code></td>
+<td>vyplněný brief, <code>chip_lint.py</code> čistý → smí se pustit</td>
+</tr>
+<tr>
+<td><code>running</code></td>
+<td>běží ve worktree</td>
+</tr>
+<tr>
+<td><code>gated</code></td>
+<td>práce hotová, čeká na bránu</td>
+</tr>
+<tr>
+<td><code>merged</code></td>
+<td>brána zelená, sloučeno, worktree uklizen</td>
+</tr>
+<tr>
+<td><code>blocked</code></td>
+<td>narazil na T3 nebo brána selhala → čeká na tebe</td>
+</tr>
+</tbody>
+</table>
+<p>Stav drž v hlavičce briefu (<code>chips/NN-*.md</code>), ne v hlavě.</p>
+<hr />
+<h2 id="8-doporuceny-rozjezd">8. Doporučený rozjezd</h2>
+<ol>
+<li><strong>Jeden chip celý ručně</strong>, ať víš, jak vypadá dobrý výstup a kolik to sežere.</li>
+<li><strong>Tři chipy paralelně</strong> — tady se ukáže, jestli řez sedí a kde to drhne.</li>
+<li><strong>Teprve pak deset.</strong> Deset oken s max effortem plus subagenti je enormní<br />
+   spotřeba; na limity narazíš dřív než na výsledky.</li>
+</ol>
+<p>Mezi kroky vždycky vyhodnoť: kolik chipů skončilo <code>blocked</code>, kolikrát brána<br />
+chytila chybu, kolikrát jsi musel zasáhnout. Když je zásahů hodně, chyba je<br />
+skoro vždycky v <strong>řezu</strong> (chipy si lezou do zelí) nebo v <strong>DoD</strong> (nebyla<br />
+měřitelná) — ne v modelu.</p>
+<hr />
+<h2 id="9-co-ukazal-pilot-2026-07-26">9. Co ukázal pilot (2026-07-26)</h2>
+<p>První ostrý běh: šest chipů ve dvou vlnách nad tímhle repem, každý ve vlastním<br />
+worktree s vlastním oknem. Výsledek: 6/6 merged, nula <code>blocked</code>, nula zásahů<br />
+mimo nárokované soubory, nula konfliktů při merge, 0 → 201 testů.</p>
+<p><strong>Co fungovalo podle návrhu</strong></p>
+<ul>
+<li><strong>Řez podle souborů drží.</strong> Ani jeden z šesti agentů nesáhl mimo svůj nárok,<br />
+  přestože k tomu měli příležitost (chyběly jim funkce, které si museli napsat<br />
+  lokálně). Místo toho to zapsali do Logu — pět nálezů putovalo nahoru.</li>
+<li><strong>Eskalace místo hádání.</strong> Všech šest nezávisle odmítlo přepnout <code>stav:</code> ve<br />
+  frontmatteru: mandát chipu je Log a checkboxy, stav je rozhodnutí orchestrátora.</li>
+<li><strong><code>expectedFailure</code> jako kanál pro nález.</strong> Chip, který našel chybu v kódu mimo<br />
+  svůj nárok, ji neopravil — zafixoval ji testem označeným <code>@unittest.expectedFailure</code><br />
+  a poslal nahoru. Chyba tím přežila merge <strong>viditelně</strong> a opravující chip ji<br />
+  musel odznačit, jinak by sada spadla na <code>unexpected success</code>.</li>
+</ul>
+<p><strong>Co se muselo doplnit</strong></p>
+<table>
+<thead>
+<tr>
+<th>Nález</th>
+<th>Důsledek pro metodiku</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Brief je sdílený soubor orchestrátora a chipu</td>
+<td>Orchestrátor <strong>nesmí</strong> editovat brief běžícího chipu. Stav přepínej před spuštěním nebo až po merge.</td>
+</tr>
+<tr>
+<td><code>git worktree add</code> větví z HEAD, ne z working tree</td>
+<td>Rozdělanou práci commitni <strong>před</strong> založením worktree, jinak chip dostane starý kód.</td>
+</tr>
+<tr>
+<td>Lint kontroloval nároky proti hlavnímu stromu, ne proti worktree</td>
+<td>Existence cest se musí ověřovat tam, kde chip opravdu pracuje.</td>
+</tr>
+<tr>
+<td>Disjunktnost souborů ≠ disjunktnost důsledků</td>
+<td>Sdílený základ (<code>chip_common.py</code>) může chip vlastnit, ale ne přejmenovávat. Hranici, kterou seznam cest nevyjádří, dopiš slovy do sekce Eskalace.</td>
+</tr>
+<tr>
+<td>Zelená v izolaci ≠ zelená dohromady</td>
+<td>Po <strong>každém</strong> merge pusť celou sadu na hlavní větvi, ne jen bránu chipu.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Spotřeba.</strong> Jeden chip = zhruba 80–110 tisíc tokenů (6 chipů ≈ 550 tisíc).<br />
+To je tvrdý strop na šířku vlny: deset chipů naráz je půl milionu tokenů<br />
+v jedné vlně, a to ještě než začneš cokoli ověřovat.</p>
+<h3 id="druhy-pilot-cizi-repo-a-role-reviewera-2026-07-26">Druhý pilot: cizí repo a role reviewera (2026-07-26)</h3>
+<p>Sedm chipů nad živým firemním repem (0 → 235 testů). Přineslo dvě<br />
+věci, které první pilot ukázat nemohl.</p>
+<p><strong>Reviewer je pro bránu totéž, co worktree pro izolaci.</strong> Brána je jen tak<br />
+přísná, jak přísné jsou testy — a ty píše týž model, který psal kód. Nasadili<br />
+jsme proto <strong>nezávislého agenta, který kód nepsal</strong>, s jediným mandátem: hlásit,<br />
+neopravovat. Jeho metodou je <strong>mutační testování</strong> — rozbít kód a měřit, kolik<br />
+mutací sada zabije. Výsledek: u chipu 05 našel dvě věcné mezery, u chipu 06<br />
+tiché selhání (<code>exit 0</code>, i když se nepodařilo přečíst ani jeden soubor) a tři<br />
+nezamčené hranice. Nic z toho brána nechytila, protože všechno bylo <em>uvnitř</em><br />
+autorovy úvahy konzistentní.</p>
+<p>Nástroj <code>chip_review.py</code> dělá strojovou část (rozsah změn proti nároku, testy<br />
+bez assertů, DoD proti příkazům brány) a <code>--zadani</code> vypíše brief pro agenta.<br />
+<strong>Nedělá verdikt</strong> — sbírá podklady.</p>
+<p><strong>Kde přestat.</strong> Řetěz chip → review → chip → review → chip je z principu<br />
+sériový a trval přes hodinu. Každá vrstva našla něco nového, ale výnos klesá:<br />
+třetí chip už z poloviny jen zamykal správné chování. Levnější je <strong>nálezy<br />
+z review zabalit do jednoho chipu</strong> než je řešit jeden po druhém.</p>
+<p><strong>Navazující chipy metodika dlouho neřešila.</strong> Chip, který staví na<br />
+nezmergovaném předchůdci, se musí větvit z jeho větve — <code>chip_run.py</code> uměl jen<br />
+z HEAD, takže worktree se zakládal ručně, a <code>chip_lint</code> hlásil nesplněnou<br />
+závislost jako chybu. Vyřešeno vlnou 5 (2026-07-28): <code>chip_run.py --od &lt;ref&gt;</code><br />
+a rozlišení stavů předka v lintu, viz §3. Merge potomka pořád přinese i práci<br />
+předka — to je vlastnost, ne vada, a proto se merguje v pořadí.</p>
+<p><strong><code>chip_run.py --stav</code> porušoval vlastní pravidlo.</strong> Přepisoval <code>stav:</code> v briefu<br />
+v hlavním stromě, zatímco agent edituje tentýž soubor ve worktree → merge skončil<br />
+konfliktem. Pravidlo „nesahej na brief běžícího chipu" musí platit i pro nástroje,<br />
+ne jen pro lidi. Opraveno 2026-07-28: zápis jde do kopie ve worktree, hlavní strom<br />
+zůstává čistý (§3).</p>
+<p><strong>Meze pilotu.</strong> CHIPS na sobě samém je příznivý případ — malé repo, čistý<br />
+Python, žádné cizí závislosti, issues psal tentýž člověk, co je řezal. Než<br />
+tomu začneš věřit u velkého repa, zopakuj to na cizím kódu.</p>
+<h3 id="vlna-4-co-vydrzi-preruseni-2026-07-27">Vlna 4: co vydrží přerušení (2026-07-27)</h3>
+<p>Vlna opravovala 10 nálezů z externího code review. Všichni tři agenti spadli<br />
+uprostřed práce na limitech účtu — <strong>ne na kódu</strong>. Po resetu byla dokončena<br />
+celá: 10/10 nálezů, 366 → 413 testů, 4/4 zelená brána.</p>
+<p><strong>Izolace obstála i při trojnásobném pádu.</strong> Hlavní strom zůstal čistý a<br />
+nedotčený; práce dvou agentů byla v gitu na jejich větvích a dala se dopsat.<br />
+Chip, který nezačal, se prostě rozřezal a pustil znovu.</p>
+<p><strong>Než pustíš agenta na „rozdělaný" chip, přečti diff — ne poznámku o něm.</strong><br />
+Záchranný zápis tvrdil, že u chipu 12 se neví, co je splněné; ve skutečnosti<br />
+byl hotový celý včetně Logu a odškrtané DoD. Chip 11 měl všechny čtyři opravy<br />
+nakódované a pokryté 13 testy. Kdybych věřil zápisu, agenti by přepisovali<br />
+hotovou práci.</p>
+<p><strong>Chip vidí na věci, které zadání nezná.</strong> Agent chipu 13 při opravě „ber větev<br />
+z argumentu za <code>merge</code>" objevil nález, který code review minul: octopus merge<br />
+(<code>git merge A B</code>) ověřoval bránu jen první větve a druhou pustil bez kontroly.<br />
+Vyplynulo to z opravy — když se větve berou z argumentů, je vidět, že jich může<br />
+být víc. <strong>Dobré zadání otevírá výhled, nejen vymezuje práci.</strong></p>
+<p><strong>Úklid worktree patří až po mergi.</strong> Hook od chipu 14 zamítá merge, když<br />
+worktree chipu chybí — bránu není kde ověřit. Kdo uklidí dřív, nemerguje.<br />
+Od 2026-07-28 to hlídá i <code>--uklid</code> sám: nezmergovanou větev uklidit odmítne.</p>
+<p><strong>Pravidlo, které drží jen v dokumentaci, se poruší nástrojem.</strong> Všechny tři<br />
+opravy z 2026-07-28 (pořadí úklidu, cíl zápisu <code>--stav</code>, hledání briefů) měly<br />
+tentýž tvar: pravidlo bylo správně napsané v metodice a nástroj ho porušoval.<br />
+Když se v projektu objeví pravidlo, ptej se rovnou, <strong>který kód ho může<br />
+porušit</strong> — ne jen kdo si ho má přečíst.</p>
+<p>Vlna 6 přidala další tři případy téhož vzorce: brána spuštěná ručně měřila<br />
+hlavní strom, <code>chip_status.py</code> ukazoval mrtvá data o běžících chipech, a<br />
+reviewer hlásil jako nález něco, co je normální stav. <strong>Nejčastější podoba<br />
+téhle vady je „nástroj čte hlavní strom, ale pravda je ve worktree".</strong><br />
+Objevila se dnes čtyřikrát ve čtyřech různých souborech.</p>
+<h3 id="falesny-signal-je-vada-i-kdyz-je-pravdivy">Falešný signál je vada, i když je pravdivý</h3>
+<p>Nástroj, který hlásí šum, si vychová čtenáře, který ho přeskakuje — a tomu pak<br />
+unikne i hlášení, které je pravé. Chip 15 to řešil u placeholderů v lintu,<br />
+chip 21 u reviewera. Oba dopadly stejně: <strong>řešením není hlášku ztlumit, ale<br />
+zúžit ji na případy, kdy skutečně škodí</strong>, nebo ji přeformulovat na to, čím<br />
+doopravdy je.</p>
+<p>Odtud dělící pravidlo, které stojí za to držet v každém nástroji projektu:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>znamená</th>
+<th>patří tam, kde</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>nález</strong></td>
+<td>„tohle je špatně"</td>
+<td>nástroj má úplná data a může rozhodnout</td>
+</tr>
+<tr>
+<td><strong>otázka</strong></td>
+<td>„tohle ověř ty"</td>
+<td>nástroj nemá čím rozhodnout, ale ví, kam se podívat</td>
+</tr>
+<tr>
+<td><strong>data</strong></td>
+<td>inventura</td>
+<td>ani jedno — je to podklad, ne verdikt</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-antipatterny">10. Antipatterny</h2>
+<table>
+<thead>
+<tr>
+<th>Antipattern</th>
+<th>Co se stane</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>N oken nad jedním working tree</td>
+<td>tiše ztracené změny</td>
+</tr>
+<tr>
+<td>„buď autonomní a důsledný" bez brány</td>
+<td>model si sám potvrdí, že to zkontroloval</td>
+</tr>
+<tr>
+<td>řezání podle témat místo souborů</td>
+<td>kolize, poslední merge vyhrává</td>
+</tr>
+<tr>
+<td>hlasování modelů místo eskalace</td>
+<td>nejistota zmizí z logu, nikdo o ní neví</td>
+</tr>
+<tr>
+<td>chip bez měřitelné DoD</td>
+<td>„hotovo" nejde ověřit, musíš číst všechno</td>
+</tr>
+<tr>
+<td>rovnou 10 chipů bez pilotu</td>
+<td>narazíš na limity a nevíš proč</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>metodika.md</code> &middot; Metodika CHIPS</div>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 03 — testy pro `chip_common.py`</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 03<br />
+nazev: testy-common<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-03/testy-common<br />
+worktree: ../CHIPS-chip-03</p>
+<hr />
+<h1 id="chip-03-testy-pro-chip_commonpy">CHIP 03 — testy pro <code>chip_common.py</code></h1>
+<p>Parser briefů je vlastní mini-implementace bez PyYAML. Když tiše přestane<br />
+rozumět frontmatteru nebo poznámkám za cestou, rozpadne se všechno ostatní.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — frontmatter: klíč/hodnota, komentář za <code>#</code>, chybějící frontmatter, prázdná hodnota</li>
+<li>[x] #2 — sekce: <code>## Nadpis</code> s diakritikou i s ozdobami (<code>## Dotčené soubory ⚠️ NÁROK</code>) se najde přes <code>najdi()</code></li>
+<li>[x] #3 — <code>soubory_detail()</code>: poznámka za <code>#</code> se odřízne, <code># nový</code> nastaví příznak, <code># poznámka</code> ne</li>
+<li>[x] #4 — <code>soubory_detail()</code>: řádek začínající <code>#</code> se ignoruje, prázdné řádky taky, koncové <code>/</code> se ořízne</li>
+<li>[x] #5 — <code>soubory()</code> vrací cesty bez poznámek (jinak by se rozbila kontrola kolizí)</li>
+<li>[x] #6 — cesty jen z ``` bloků; text mimo blok se nepočítá</li>
+<li>[x] #7 — <code>repo_path()</code>: absolutní cesta, relativní (od adresáře s briefy), <code>~</code>, chybějící klíč → <code>None</code></li>
+<li>[x] #8 — <code>zavislosti()</code>: prázdné, <code>-</code>, <code>nic</code>, <code>[]</code>, <code>01, 2</code> (doplnění nuly na dvě místa)</li>
+<li>[x] #9 — <code>issues()</code>: <code>- [ ]</code> i <code>- [x]</code>, odsazené, řádky mimo sekci se nepočítají</li>
+<li>[x] #10 — <code>id</code> a <code>nazev</code> fallback z názvu souboru, když chybí ve frontmatteru</li>
+<li>[x] #11 — <code>nacti_vse()</code> vynechá <code>TEMPLATE.md</code>, ale s <code>vcetne_sablony=True</code> ho vrátí; neexistující adresář → prázdný seznam</li>
+<li>[x] #12 — <code>_norm()</code>: diakritika, interpunkce, vícenásobné mezery</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tests/test_chip_common.py    # nový
+</code></pre>
+<p>Nesmíš měnit <code>tools/</code> ani nic mimo tento seznam. Když test odhalí chybu v<br />
+<code>chip_common.py</code>, <strong>neopravuj ji</strong> — zapiš ji do sekce Log a označ test<br />
+<code>@unittest.expectedFailure</code> s komentářem proč.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] alespoň 20 testovacích metod, každá issue výše pokrytá aspoň jednou</li>
+<li>[x] testy si staví vlastní dočasné soubory (<code>tempfile</code>) a po sobě uklidí</li>
+<li>[x] pouze standardní knihovna (žádný pytest, žádné nové závislosti)</li>
+<li>[x] <code>python tools/chip_lint.py</code> v repu dál vrací 0</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, popiš proč v Logu.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, zapiš do Logu, nehádej.</strong></p>
+<ul>
+<li>změna chování <code>tools/chip_common.py</code> (je mimo tvůj nárok, nárokuje si ho orchestrátor)</li>
+<li>nová závislost mimo stdlib</li>
+<li>změna formátu frontmatteru nebo šablony briefu</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testovaný modul: <code>tools/chip_common.py</code>. Import:<br />
+<code>sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))</code>.</li>
+<li><code>CHIPS_DIR</code> je <strong>globální stav</strong> modulu — přepíná se <code>nastav_chips_dir(cesta)</code>.<br />
+  V <code>tearDown</code> ho vrať na původní hodnotu, jinak si testy ovlivní navzájem.</li>
+<li><code>parse(path)</code> vrací <code>Chip</code>; <code>nacti_vse()</code> čte celý adresář a řadí podle jména.</li>
+<li>Poznámka za cestou se pozná regexem <code>KOMENTAR</code> (<code>\s+#\s*(.*)$</code>) a příznak<br />
+  „nový" regexem <code>NOVY</code> (<code>^(nov[ýy]|new)\b</code>, case-insensitive) — tedy <code># nový</code>,<br />
+<code># novy soubor</code>, <code># new</code> ano; <code># bude nový</code> ne (nezačíná tím slovem).</li>
+<li>Soubory piš v UTF-8 (<code>Path.write_text(..., encoding="utf-8")</code>) — bez toho<br />
+  Windows rozbije diakritiku a testy budou padat z jiného důvodu, než myslíš.</li>
+<li>Konvence: názvy testů a komentáře česky, jako zbytek projektu.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>hotovo</td>
+<td><code>tests/test_chip_common.py</code>: 68 testovacích metod v 10 třídách, issues #1–#12 pokryté. Brána zelená: <code>python -m unittest discover -s tests -v</code> → <code>Ran 68 tests … OK</code>, <code>python tools/chip_lint.py</code> → <code>OK — 0 chyb, 0 varování</code>, exit 0.</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>nález</td>
+<td><strong>Prázdná hodnota ve frontmatteru není totéž co chybějící klíč.</strong> <code>chip:</code> / <code>nazev:</code> / <code>stav:</code> bez hodnoty uloží <code>""</code>, takže <code>meta.get(klic, default)</code> vrátí prázdný řetězec a fallback (<code>path.stem</code>, <code>"draft"</code>) se neuplatní. Důsledek: <code>chip_lint.py</code> takový brief nahlásí jako „neplatný stav ''“, ne jako chybějící údaj. Nejde o rozpor se zadáním (issue #10 mluví o <em>chybějícím</em> klíči), takže bez <code>@unittest.expectedFailure</code> — chování je zafixované charakterizačním testem <code>TestIdentita.test_prazdna_hodnota_fallback_nespousti</code>. Případná změna je zásah do <code>tools/chip_common.py</code> = mimo nárok tohoto chipu, rozhodne orchestrátor.</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>nález</td>
+<td>Ostatní chování odpovídá briefu — žádná chyba v <code>chip_common.py</code> nenalezena, žádný test není <code>expectedFailure</code>. Ověřené hraniční případy nad rámec issues: neuzavřený frontmatter (bez druhého <code>---</code> se meta neparsuje), <code>###</code> nadpis nevytváří sekci, <code>#</code> bez mezery před sebou se nepovažuje za poznámku (<code>src/soubor#1.py</code> zůstane celá cesta), <code>nastav_chips_dir(None/"")</code> záměrně nemění globální <code>CHIPS_DIR</code>.</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>pozn.</td>
+<td><code>stav:</code> ve frontmatteru ponechán na <code>ready</code> — přepnutí na <code>gated</code>/<code>merged</code> je krok orchestrátora, ne agenta chipu. Adresář <code>tests/</code> je nový (v repu dosud nebyl), <code>__init__.py</code> není potřeba (<code>unittest discover</code> si cestu doplní sám).</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>merged</td>
+<td>brána ověřena orchestrátorem nezávisle (testy + lint), sloučeno do master, worktree uklizen</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>merged</td>
+<td>Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>03-testy-common.md</code> &middot; CHIP 03 — testy pro `chip_common.py`</div>
+</body>
+</html>

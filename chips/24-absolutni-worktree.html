@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 24<br />
+nazev: absolutni-worktree<br />
+stav: merged</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<h1 id="jina-hodnota-nez-tahle-sestice-je-pro-chip_lintpy-chyba-slovnik-je-tady">Jiná hodnota než tahle šestice je pro <code>chip_lint.py</code> chyba (slovník je tady,</h1>
+<h1 id="protoze-agent-drzi-v-ruce-brief-ne-metodiku">protože agent drží v ruce brief, ne metodiku):</h1>
+<h1 id="draft-brief-se-pise-hranice-jeste-nejsou-jiste">draft   — brief se píše, hranice ještě nejsou jisté</h1>
+<h1 id="ready-vyplneny-brief-chip_lintpy-cisty-smi-se-pustit">ready   — vyplněný brief, <code>chip_lint.py</code> čistý → smí se pustit</h1>
+<h1 id="running-bezi-ve-worktree">running — běží ve worktree</h1>
+<h1 id="gated-prace-hotova-ceka-na-branu">gated   — práce hotová, čeká na bránu</h1>
+<h1 id="merged-brana-zelena-slouceno-worktree-uklizen">merged  — brána zelená, sloučeno, worktree uklizen</h1>
+<h1 id="blocked-narazil-na-t3-nebo-brana-selhala-ceka-na-rozhodnuti-cloveka">blocked — narazil na T3 nebo brána selhala → čeká na rozhodnutí člověka</h1>
+<p>zavisi_na:           # ID chipů, které musí být 'merged' dřív, např. 00, 01<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne; lint pak neexistenci repa a cest jen varuje<br />
+vetev: ai/chip-24/absolutni-worktree   # prefix ai/ = kód psal AI agent (audit v git logu); prázdné = odvodí chip_run.py<br />
+worktree: ../CHIPS-chip-24</p>
+<hr />
+<h1 id="chip-24-absolutni-worktree-cte-chip_run-jinak-nez-brana">CHIP 24 — absolutní <code>worktree:</code> čte <code>chip_run</code> jinak než brána</h1>
+<p><code>chip_run.cesty()</code> z absolutní hodnoty <code>worktree:</code> vezme jen jméno adresáře a<br />
+položí ho vedle repa, kdežto <code>chip_gate.kde_spustit()</code> i <code>hook.kde_overit()</code> ji<br />
+respektují — worktree pak vznikne jinde, než kam se dívá brána. Chip srovnává<br />
+<code>chip_run</code> na chování brány.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>chip_run.cesty()</code>: absolutní <code>worktree:</code> platí, jak je zapsaný<br />
+      (žádné <code>.name</code>, žádné skládání pod <code>repo.parent</code>)</li>
+<li>[x] #2 — relativní <code>worktree:</code> se chová <strong>přesně jako dnes</strong>: bere se jen<br />
+      jméno adresáře a klade se vedle repa, aby výsledek nezávisel na <code>cwd</code></li>
+<li>[x] #3 — bez <code>repo:</code> v briefu: absolutní cesta platí dál, relativní spadne<br />
+      na dnešní <code>Path(jmeno)</code> (volající chybějící <code>repo:</code> hlásí sám)</li>
+<li>[x] #4 — regresní test na relativní větev, aby ji oprava #1 nerozbila<br />
+      potichu; test musí selhat, kdyby se <code>.name</code> u relativní cesty ztratilo</li>
+<li>[x] #5 — test, že <code>chip_run.cesty()</code>, <code>chip_gate.kde_spustit()</code> a<br />
+<code>hook.kde_overit()</code> dají nad TÝMŽ briefem tutéž cestu — pro absolutní<br />
+      i relativní zápis. Tohle je vlastní obsah chipu: shoda tří míst, ne<br />
+      chování jednoho.</li>
+<li>[x] #6 — v <code>tests/test_chip_gate.py</code> zrušit <code>@unittest.expectedFailure</code> u<br />
+<code>test_absolutni_cesta_se_s_chip_run_rozchazi</code>, přejmenovat na tvrzení o<br />
+      shodě a docstring přepsat z „nález, neopravuje se zde" na „srovnáno<br />
+      chipem 24". Dekorátor <strong>musí</strong> zmizet — jinak sada spadne na<br />
+<em>unexpected success</em>, což je návrh chipu 19, ne chyba.</li>
+<li>[x] #7 — docstring <code>chip_run.cesty()</code>: dnešní věta „z <code>worktree:</code> se bere jen<br />
+      jméno adresáře" je po opravě nepravdivá pro absolutní zápis</li>
+<li>[x] #8 — docstring <code>chip_gate.kde_spustit()</code> tvrdí „cesta se řeší jako v<br />
+<code>chip_run.cesty()</code>" — dnes je to <strong>lež</strong> a opravou #1 se stane pravdou;<br />
+      větu ponech, ale ověř, že po změně sedí, a doplň, co znamená absolutní</li>
+<li>[x] #9 — <code>python tools/chip_run.py 24 --dry-run</code> vypíše u absolutního<br />
+<code>worktree:</code> tutéž cestu, jakou pak bránu spustí <code>chip_gate.py</code></li>
+</ul>
+<blockquote>
+<p>Strop: 10–20 issues. Víc → rozřež na dva chipy.</p>
+</blockquote>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<p>Seznam souborů/adresářů, které tenhle chip smí měnit. <strong>Žádný jiný chip je nesmí<br />
+mít v seznamu</strong> — kontroluje <code>tools/chip_lint.py</code>.</p>
+<pre><code>tools/chip_run.py
+tools/chip_gate.py       # POUZE docstring kde_spustit() — chování se nemění
+tests/test_chip_run.py
+tests/test_chip_gate.py
+</code></pre>
+<p><code>tools/hook_chip_gate.py</code> v nároku <strong>není a měnit se nesmí</strong> — absolutní cestu<br />
+už dnes respektuje správně, je to strana, na kterou se <code>chip_run</code> srovnává.<br />
+Test z #5 si ho smí naimportovat a číst; kdyby vyšlo, že se musí změnit i on,<br />
+je to eskalace (viz T3), ne tichý zásah.</p>
+<p>Cesty jsou <strong>relativní k <code>repo:</code></strong> (bez <code>..</code>, bez disku). Ve stavu <code>ready</code> lint<br />
+ověří, že v repu opravdu existují — soubor, který teprve vznikne, označ <code># nový</code>,<br />
+jinak je nárok hlášený jako překlep. Vzory (<code>src/*.py</code>) fungují a pro kontrolu<br />
+kolizí se rozbalují na konkrétní soubory.</p>
+<p>Soubory mimo tento seznam se <strong>nemění</strong>. Když je to nutné → eskalace (viz níže).</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<p>Musí jít ověřit příkazem, ne názorem.</p>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde. Výchozí stav před<br />
+      chipem: <strong>676 testů, <code>OK (expected failures=1)</code></strong> (ověřeno 2026-07-31).<br />
+      Po chipu musí počet testů stoupnout (nové testy k #4 a #5) a výsledek<br />
+      být čisté <strong><code>OK</code></strong> bez expected failures — ta jediná je právě tenhle<br />
+      nesoulad. Pozn.: <code>@unittest.expectedFailure</code> v <code>test_chip_review.py</code><br />
+      je uvnitř řetězcové fixtury, ne skutečný test; nepočítá se.</li>
+<li>[x] <code>python tools/chip_lint.py</code> → rc 0, bez chyb</li>
+<li>[x] <code>grep -n "expectedFailure" tests/test_chip_gate.py</code> nevrací nic</li>
+<li>[x] <code>python tools/chip_run.py 24 --dry-run</code> projde a cesta ve výpisu se<br />
+      shoduje s tím, co hlásí <code>python tools/chip_gate.py 24</code> (issue #9)</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, otevři PR.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+python tools/chip_run.py 24 --dry-run
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, otevři PR s otázkou, nehádej.</strong></p>
+<ul>
+<li>změna veřejného API nebo formátu dat</li>
+<li>migrace schématu / nevratná operace nad daty</li>
+<li>nová závislost nebo změna licence</li>
+<li>bezpečnostní rozhodnutí, cokoli se secrets</li>
+<li>soubor mimo sekci „Dotčené soubory" — jmenovitě <code>tools/hook_chip_gate.py</code></li>
+<li><strong>změna chování brány.</strong> Směr srovnání je rozhodnutý: <code>chip_run</code> se<br />
+  přizpůsobuje bráně, ne naopak. Kdyby se ukázalo, že to nejde bez zásahu do<br />
+<code>kde_spustit()</code>/<code>kde_overit()</code>, zastav se a zeptej — jsi na jiné variantě,<br />
+  než která byla schválena.</li>
+<li><strong>zúžení vstupu místo srovnání</strong> (odmítnout absolutní <code>worktree:</code> jako chybu<br />
+  briefu) je zvažovaná a <strong>zamítnutá</strong> varianta, ne zkratka k zelené</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<p><strong>Proč zrovna tímhle směrem.</strong> Důvod pro <code>.name</code> v <code>chip_run.cesty()</code> je<br />
+nezávislost na <code>cwd</code> — aby relativní zápis v briefu neznamenal něco jiného<br />
+podle toho, odkud se skript pustí. Absolutní cesta na <code>cwd</code> nezávisí, takže<br />
+u ní <code>.name</code> nic nekupuje: jen zahodí to, co brief říká. Proto se srovnává<br />
+<code>chip_run</code>, ne brána.</p>
+<p><strong>Kde to je.</strong></p>
+<ul>
+<li><code>tools/chip_run.py</code> → <code>cesty()</code> (~ř. 283), tři návratové hodnoty<br />
+<code>(repo, vetev, worktree)</code>, bez vedlejších efektů — dobře testovatelné</li>
+<li><code>tools/chip_gate.py</code> → <code>kde_spustit()</code> (~ř. 127), docstring odkazuje na<br />
+<code>chip_run.cesty()</code></li>
+<li><code>tools/hook_chip_gate.py</code> → <code>kde_overit()</code> (~ř. 304) — jen ke čtení</li>
+<li><code>tests/test_chip_gate.py</code> → <code>test_absolutni_cesta_se_s_chip_run_rozchazi</code><br />
+  (~ř. 1052) je <code>@unittest.expectedFailure</code> a jeho docstring popisuje přesně<br />
+  tuhle past; přečti si ho první, je to zadání napsané chipem 19</li>
+</ul>
+<p><strong>Konvence projektu</strong> (<code>CLAUDE.md</code>): stdlib <code>unittest</code>, žádný pytest; každý test<br />
+si staví vlastní <code>tempfile</code> fixturu a uklidí po sobě; <code>chip_common.CHIPS_DIR</code> je<br />
+globální stav — v <code>tearDown</code> ho vracej. Ke každému <code>.md</code> patří <code>.html</code><br />
+(<code>python tools/md2html.py --all</code>) — briefu se to netýká, ten generuje<br />
+orchestrátor po mergi.</p>
+<p><strong>Pozor na Windows.</strong> <code>Path("/x").is_absolute()</code> je na Windows <code>False</code> (chybí<br />
+disk) — testy piš tak, aby platily i tam, kde se pouštějí (<code>C:/…</code>), ne jen na<br />
+POSIXu. <code>test_brana_a_hook_resi_worktree_stejne</code> je vzor, jak to už řeší jinde.</p>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-31</td>
+<td>draft</td>
+<td>založeno</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>ready</td>
+<td>Směr srovnání rozhodl uživatel: <code>chip_run</code> se přizpůsobuje bráně (varianty „gate+hook berou jen jméno" a „absolutní cestu odmítnout jako chybu briefu" zamítnuty). Výchozí stav sady ověřen: 676 testů, <code>OK (expected failures=1)</code>; <code>chip_lint.py</code> rc 0.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>merged</td>
+<td>Brána ověřena orchestrátorem nezávisle na hlášení agenta: <code>chip_gate.py 24</code> ZELENÁ nad worktree, sada 681 testů čisté <code>OK</code> (676 → +5, <code>expected failures</code> 1 → 0), <code>expectedFailure</code> v <code>test_chip_gate.py</code> 0 výskytů, diff jen ve 4 nárokovaných souborech + brief, <code>hook_chip_gate.py</code> nedotčen. Po mergi celá sada na masteru: 681 testů <code>OK</code>, lint rc 0. Sloučeno <code>--no-ff</code>, worktree uklizen.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>running</td>
+<td>Hotovo #1–#9. <code>cesty()</code> větví na <code>is_absolute()</code>: absolutní zápis platí, jak je; relativní beze změny (<code>.name</code> vedle repa). Docstringy <code>cesty()</code> i <code>kde_spustit()</code> srovnány s realitou. +5 testů (4 v <code>test_chip_run.py</code>: absolutní s/bez repa, regrese <code>.name</code>, relativní bez repa; 1 v <code>test_chip_gate.py</code>: shoda tří míst pro relativní/hlubokou/absolutní). Dřívější očekávané selhání přejmenováno na <code>test_absolutni_cesta_sedne_s_chip_run</code>. Brána: 681 testů čisté <code>OK</code>, lint rc 0, <code>chip_gate.py 24</code> ZELENÁ a hlásí týž strom jako <code>chip_run.py 24 --dry-run</code>. <code>hook_chip_gate.py</code> nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>24-absolutni-worktree.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>

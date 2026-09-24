@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 12 — zastaralé dosazení v chip_slice a useknuté zadání v chip_run</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 12<br />
+nazev: slice-run<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-12/slice-run<br />
+worktree: ../CHIPS-chip-12</p>
+<hr />
+<h1 id="chip-12-zastarale-dosazeni-v-chip_slice-a-useknute-zadani-v-chip_run">CHIP 12 — zastaralé dosazení v chip_slice a useknuté zadání v chip_run</h1>
+<p>Dva nálezy z code review. První je zvlášť poučný: přesně tahle chyba už<br />
+byla jednou opravena v <code>chip_new.py</code> — ale oprava se zastavila u prvního<br />
+výskytu vzoru a druhý (v <code>chip_slice.py</code>) zůstal.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <strong><code>chip_slice.text_briefu()</code> dosazuje starý tvar <code>vetev:</code></strong><br />
+      (ř. ~271): nahrazuje <code>vetev: chip/NN-kratky-nazev-s-pomlckami</code>, ale<br />
+      šablona má od včerejška <code>vetev: ai/chip-NN/kratky-nazev-s-pomlckami</code>.<br />
+<code>.replace()</code> bez shody tiše selže → vygenerovaný brief nese doslovný<br />
+      placeholder, chip_run z něj založí nesmyslnou větev a hook ji nepozná.<br />
+      Oprav dosazení na aktuální tvar šablony.</li>
+<li>[x] #2 — <strong>test proti rozejití se šablonou</strong> — stejný princip jako<br />
+<code>test_kazdy_replace_v_chip_new_ma_vzor_v_sablone</code> v<br />
+<code>tests/test_chip_new.py</code>: projdi všechny <code>.replace("…")</code> v<br />
+<code>chip_slice.py</code> a ověř, že vzor v <code>TEMPLATE.md</code> existuje. Tím se<br />
+      tahle třída chyb zamkne i pro druhý výskyt.</li>
+<li>[x] #3 — <strong><code>chip_run --spustit</code> přes <code>claude.cmd</code> usekne zadání</strong><br />
+      (ř. ~177): víceřádkové zadání jako jeden argv element cmd.exe usekne<br />
+      na prvním newline — agent dostane jen první řádek. Oprav: zadání<br />
+      předávat bezpečně i pro .cmd shim — zapiš ho do dočasného souboru<br />
+      a spusť <code>claude "$(&lt; soubor)"</code>-ekvivalent NE; nejjednodušší robustní<br />
+      cesta na Windows: <code>subprocess.run([exe], input=zadani, ...)</code> nefunguje<br />
+      (claude čte prompt z argv) → použij <code>subprocess.list2cmdline</code> jen pro<br />
+      skutečné .exe, a pro <code>.cmd</code>/<code>.bat</code> shim zadání ulož do temp souboru<br />
+      a předej <code>claude --prompt-file</code> NEEXISTUJE-LI ten přepínač, pak:<br />
+      detekuj <code>.cmd</code>/<code>.bat</code> příponu a v tom případě spusť přes<br />
+<code>["cmd", "/c", exe, zadani]</code> s nahrazením newline za mezery NE — to<br />
+      mění obsah. Rozhodni podle skutečného chování: ověř si na místě, co<br />
+<code>claude</code> na tomhle stroji je (<code>shutil.which</code>), a zvol řešení, které<br />
+<strong>prokazatelně doručí celé víceřádkové zadání</strong>. Pokud žádné bezpečné<br />
+      řešení pro .cmd shim není, je legitimní odpověď: u .cmd shimu<br />
+<code>--spustit</code> odmítnout se srozumitelnou hláškou a vypsat zadání<br />
+      k ručnímu vložení (dnešní chování bez <code>--spustit</code>).</li>
+<li>[x] #4 — test na #3: mock <code>shutil.which</code> vrací cestu s <code>.cmd</code> i <code>.exe</code><br />
+      a ověř zvolené chování (doručení celého zadání / srozumitelné odmítnutí)</li>
+<li>[x] #5 — testy z #2 a #4 musí na PŮVODNÍ verzi selhat (doloženo v Logu)</li>
+<li>[x] #6 — celá stávající sada projde beze změny počtu selhání</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_slice.py
+tools/chip_run.py
+tests/test_chip_slice.py
+tests/test_chip_run.py
+</code></pre>
+<p>Nesahej na <code>chip_new.py</code> ani <code>tests/test_chip_new.py</code> (vzor pro #2 z něj jen<br />
+čti), na <code>TEMPLATE.md</code>, ani na soubory chipů 10 a 11 (<code>hook_chip_gate.py</code>,<br />
+<code>chip_gate.py</code>, <code>chip_lint.py</code>, <code>chip_common.py</code> + jejich testy).</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>chip_slice --zapsat</code> do temp adresáře vygeneruje brief s dosazenou<br />
+      větví <code>ai/chip-NN/&lt;nazev&gt;</code> (skutečné NN a název, žádný placeholder) —<br />
+      spusť doopravdy, výsledek do Logu</li>
+<li>[x] test rozejití se šablonou existuje pro chip_slice (#2)</li>
+<li>[x] chování <code>--spustit</code> s .cmd shimem je definované a otestované (#3, #4)</li>
+<li>[x] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna <code>TEMPLATE.md</code>, <code>chip_new.py</code> nebo souborů chipů 10/11</li>
+<li>u #3: kdyby jediné řešení vyžadovalo novou závislost nebo změnu chování<br />
+<code>claude</code> CLI — zastav se a zapiš; odmítnutí s hláškou je přijatelný výsledek</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Vzor testu proti rozejití: <code>tests/test_chip_new.py</code>,<br />
+<code>test_kazdy_replace_v_chip_new_ma_vzor_v_sablone</code> — čti, neupravuj.</li>
+<li><code>chip_slice.text_briefu()</code> čte šablonu z <code>chips/TEMPLATE.md</code> za běhu;<br />
+  dosazení dělá sadou <code>.replace()</code>. Zkontroluj VŠECHNY, ne jen <code>vetev:</code> —<br />
+  nález mluví o ř. 271 i 252.</li>
+<li>Na tomhle stroji je <code>claude</code> nativní <code>.exe</code> (<code>%USERPROFILE%\.local\bin\claude.exe</code>),<br />
+  ale test musí pokrýt i <code>.cmd</code> větev mockem — jiné stroje mají npm shim.</li>
+<li>Regresní důkaz: <code>git show HEAD:tools/chip_slice.py</code> + <code>sys.modules</code>.</li>
+<li>Konvence: hlášky česky, dvě mezery odsazení.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>založeno z code review (nálezy 0 a 8)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#1: v <code>text_briefu()</code> opraven vzor na <code>vetev: ai/chip-NN/kratky-nazev-s-pomlckami</code>. Zkontrolovány VŠECHNY <code>.replace()</code> v souboru: rozešlý byl jen <code>vetev:</code> (pův. ř. 271 v těle fce začínající na ř. 252 — druhý údaj nálezu je start <code>text_briefu</code>); ostatních 7 vzorů v šabloně sedí. Mimo šablonu je jen normalizace lomítek v <code>cesty_z_textu</code>/<code>nacti_json</code> — proto test #2 scanuje zdroják <code>text_briefu()</code>, ne celý modul.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#3 rozhodnutí: <code>.cmd</code>/<code>.bat</code> shim se u <code>--spustit</code> ODMÍTÁ (<code>je_cmd_shim()</code> + hláška) a běh degraduje na dnešní chování bez <code>--spustit</code>: worktree se založí, zadání se vypíše k ručnímu vložení, rc 0. Důvod: cmd.exe čte příkazovou řádku jen po první newline → useknutí; náhrada newline mění obsah, <code>--prompt-file</code> u claude neexistuje a temp soubor by chtěl změnu chování CLI (T3). Ověřeno na místě: zdejší <code>claude</code> je nativní <code>%USERPROFILE%/.local/bin/claude.EXE</code> (<code>shutil.which</code>) — <code>.exe</code> větev beze změny předává celé víceřádkové zadání jedním argv elementem (test <code>test_exe_dostane_cele_viceradkove_zadani</code>).</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#5 regresní důkaz (git show HEAD: + sys.modules, testy z #2 a #4 proti původní verzi): 4/4 FAIL. Hlášky: „AssertionError: 'vetev: chip/NN-kratky-nazev-s-pomlckami' not found in …TEMPLATE.md — dosazení tiše propadne"; „'vetev: ai/chip-01/navrh-01' not found in …vetev: ai/chip-NN/kratky-nazev-s-pomlckami…"; „'C:/fake/claude.cmd' != 'git' — kromě gitu se nesmí spustit nic" (mock zachytil spuštění shimu s celým víceřádkovým zadáním); „False is not true" (.BAT větev). Na opravené verzi 4/4 OK.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>DoD: <code>unittest discover</code> 366 testů, 0 selhání (před změnou 360, 0 selhání → beze změny počtu selhání, +6 testů); <code>chip_lint.py</code> rc 0 (3 varování o placeholderech existovala už před chipem). Skutečný běh <code>chip_slice --todo … --zapsat &lt;temp&gt;</code>: „zapsáno 1 draft briefů", frontmatter obsahuje <code>vetev: ai/chip-01/navrh-01</code>, žádný placeholder ze šablony. Jen stdlib (<code>inspect</code>, <code>re</code>, <code>unittest.mock</code>).</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>12-slice-run.md</code> &middot; CHIP 12 — zastaralé dosazení v chip_slice a useknuté zadání v chip_run</div>
+</body>
+</html>

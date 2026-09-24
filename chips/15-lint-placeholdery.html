@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 15 — lint hlásí placeholder i tam, kde je jen citovaný</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 15<br />
+nazev: lint-placeholdery<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-15/lint-placeholdery<br />
+worktree: ../CHIPS-chip-15</p>
+<hr />
+<h1 id="chip-15-lint-hlasi-placeholder-i-tam-kde-je-jen-citovany">CHIP 15 — lint hlásí placeholder i tam, kde je jen citovaný</h1>
+<p>Kontrola nedovyplněné šablony hledá vzorové řetězce <strong>v celém textu briefu</strong>,<br />
+takže varuje i u chipů, které o tom placeholderu jen píšou. Je to jako by<br />
+kontrola pravopisu podtrhla slovo „překlep" ve větě „tady je překlep".</p>
+<p>Dnes to dělá tři trvalá falešná varování (briefy 08, 09, 12). Nic to neblokuje —<br />
+jsou to varování, ne chyby. Vadí to jinak: <strong>na trvalý šum si člověk zvykne<br />
+a přestane ho číst</strong>, takže mu unikne čtvrté varování, které bude pravé.</p>
+<h2 id="kde-presne-to-je">Kde přesně to je</h2>
+<p><code>tools/chip_lint.py</code>, ř. ~359:</p>
+<pre><code class="language-python">text = c.path.read_text(encoding=&quot;utf-8&quot;)
+for ph in PLACEHOLDERY:
+    if ph in text:
+        varovani.append(...)
+</code></pre>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>
+<p>[x] #1 — <strong>Každý placeholder kontroluj jen tam, kde skutečně škodí.</strong><br />
+      Nahraď plošné <code>ph in text</code> mapováním placeholder → místo:</p>
+<table>
+<thead>
+<tr>
+<th>Placeholder</th>
+<th>Kde vadí</th>
+<th>Kde je neškodný</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>C:/cesta/k/repu</code></td>
+<td>frontmatter <code>repo:</code></td>
+<td>próza, Log</td>
+</tr>
+<tr>
+<td><code>kratky-nazev-s-pomlckami</code></td>
+<td>frontmatter <code>nazev:</code>, <code>vetev:</code></td>
+<td>próza, Log, text issue</td>
+</tr>
+<tr>
+<td><code>src/parser.py</code></td>
+<td>cesty v sekci „Dotčené soubory" (<code>c.soubory()</code>)</td>
+<td>próza, Log</td>
+</tr>
+<tr>
+<td><code>#12 — stručný popis</code></td>
+<td>texty issues (<code>c.issues()</code>)</td>
+<td>próza, Log</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Past, na kterou nesmíš naletět:</strong> „stačí vynechat Log" NEFUNGUJE.<br />
+  Brief 12 má <code>kratky-nazev-s-pomlckami</code> i v textu issue #1, protože ten<br />
+  chip právě tenhle placeholder opravoval. Proto se u něj musí kontrolovat<br />
+<strong>jen frontmatter</strong>, ne issues.<br />
+- [x] #2 — <strong>Nesmí to oslabit kontrolu.</strong> Brief vyrobený přímo z <code>TEMPLATE.md</code><br />
+  a přepnutý na <code>ready</code> musí dál nahlásit <strong>všechny čtyři</strong> placeholdery.<br />
+  To je hlavní důkaz, že oprava neudělala z kontroly atrapu.<br />
+- [x] #3 — testy: (a) test z #2 nad kopií skutečné <code>TEMPLATE.md</code>, ne nad<br />
+  vymyšleným textem; (b) po jednom testu na každé ze tří dnešních falešných<br />
+  varování (citace v Logu, citace v prózi, citace v textu issue)<br />
+- [x] #4 — <strong>doloženo na skutečných briefech</strong>: <code>python tools/chip_lint.py</code><br />
+  musí skončit na <strong>0 chyb, 0 varování o placeholderech</strong>. Varování jiného<br />
+  druhu (např. závislost na nezmergovaném chipu) tím dotčená nejsou —<br />
+  výstup před i po zapiš do Logu.<br />
+- [x] #5 — testy z #3 musí na PŮVODNÍ verzi selhat (doloženo hláškami v Logu)<br />
+- [x] #6 — celá stávající sada projde beze změny počtu selhání</p>
+</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_lint.py
+tests/test_chip_lint.py
+</code></pre>
+<p>Nesahej na <code>chips/TEMPLATE.md</code> (test si z ní jen čte), na žádný brief kromě<br />
+vlastního, ani na <code>chip_common.py</code> a ostatní nástroje.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>python tools/chip_lint.py</code> nad skutečnou složkou <code>chips/</code> nehlásí<br />
+<strong>žádné</strong> varování o placeholderu — spusť doopravdy, výstup do Logu</li>
+<li>[x] brief vyrobený z <code>TEMPLATE.md</code> ve stavu <code>ready</code> hlásí <strong>všechny čtyři</strong><br />
+      placeholdery — pokryto testem nad skutečnou šablonou</li>
+<li>[x] <code>kratky-nazev-s-pomlckami</code> v textu issue se <strong>nehlásí</strong>, v <code>nazev:</code><br />
+      nebo <code>vetev:</code> <strong>hlásí</strong> — dva testy</li>
+<li>[x] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li><strong>oslabení lintu</strong>: nic, co je dnes chyba, se nesmí stát varováním, a žádná<br />
+  kontrola nesmí zmlknout úplně. Kdyby jediné čisté řešení znamenalo některý<br />
+  placeholder přestat hlídat, zastav se a zapiš</li>
+<li>změna <code>chips/TEMPLATE.md</code> nebo textu cizích briefů (falešná varování se řeší<br />
+  v lintu, <strong>ne přepsáním briefů, aby lint mlčel</strong>)</li>
+<li>odstranění/přejmenování čehokoli z veřejného API <code>chip_lint</code></li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Kontrola běží jen pro <code>c.stav != "draft"</code> — to nech být.</li>
+<li><code>c.soubory()</code> vrací nárokované cesty bez poznámek, <code>c.issues()</code> texty issues,<br />
+<code>c.meta</code> frontmatter. Všechno je v <code>tools/chip_common.py</code> (jen čti).</li>
+<li>Tvar <code>PLACEHOLDERY</code> si zvol sám (dnes je to <code>tuple</code> řetězců) — dává smysl<br />
+  udělat z toho mapování nebo malou datovou strukturu. Ať je z kódu vidět<br />
+<strong>proč</strong> se který placeholder hledá jinde, ne jen že se hledá.</li>
+<li>Zvaž, jestli u frontmatteru kontrolovat celý řádek, nebo jen hodnotu za<br />
+  dvojtečkou. Brief 08 má za hodnotou komentář — nesmí ho to rozhodit.</li>
+<li>Regresní důkaz: původní verzi vytáhni <code>git show HEAD:tools/chip_lint.py</code><br />
+  do dočasného souboru a <strong>zaregistruj do <code>sys.modules</code> před importem testů</strong><br />
+  (<code>sys.path.insert</code> nestačí, testy si <code>tools/</code> samy vkládají na <code>sys.path[0]</code>).<br />
+  Ověř assertem, že testovaný modul je opravdu ta podstrčená kopie. Hotové<br />
+  vzory jsou v Logu briefů 13 a 14 (jen čti).</li>
+<li>Konvence: hlášky česky, <code>X</code> chyba / <code>!</code> varování, odsazení kódu 4 mezery<br />
+  (PEP 8) podle zbytku <code>tools/</code>.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>založeno — tři trvalá falešná varování po sjednocení složky chips/</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#1: <code>PLACEHOLDERY</code> je nově n-tice <code>Placeholder(text, kde, hodnoty, cela_hodnota)</code> — ke každému vzorovému řetězci patří <strong>funkce, která vrátí hodnoty k prohledání</strong>, ne celý text briefu. Mapování: <code>C:/cesta/k/repu</code> → <code>meta['repo']</code>; <code>kratky-nazev-s-pomlckami</code> → <code>meta['nazev']</code> + <code>meta['vetev']</code>; <code>src/parser.py</code> → <code>c.soubory()</code>; <code>#12 — stručný popis</code> → <code>c.issues()</code>. Kontroluje se <strong>hodnota za dvojtečkou, ne celý řádek</strong> — <code>chip_common.parse</code> komentář za hodnotou odřízne, takže <code>stav: ready  # draft \| ready \| …</code> v briefu 08 nic nerozhodí (test <code>test_komentar_za_hodnotou_frontmatteru_kontrolu_nerozhodi</code>). U cest se porovnává <strong>celá hodnota</strong> (<code>cela_hodnota=True</code>): podřetězec by hlásil i legitimní <code>balik/src/parser.py</code>, kdežto nevyplněná šablona má nárok přesně <code>src/parser.py</code>. Nová <code>zbyle_placeholdery(c)</code> vrací hlášky (jedna na placeholder) a nese i místo: „zůstal placeholder ze šablony: 'src/parser.py' (nárokovaná cesta v 'Dotčené soubory')". Kontrola dál běží jen mimo <code>draft</code> — nedotčeno.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td><strong>Past ověřena, ne uvěřena.</strong> „Stačí vynechat Log" opravdu NEFUNGUJE: brief 12 má <code>kratky-nazev-s-pomlckami</code> na ř. 20–21 uvnitř textu issue #1 (a až pak v Logu na ř. 107). Navíc <code>c.issues()</code> vrací jen PRVNÍ řádek odrážky, takže ani kontrola nad texty issues by ten výskyt nechytla — vyšlo by falešné „čisto" ze špatného důvodu. Proto je u tohohle placeholderu jediné poctivé místo frontmatter (<code>nazev:</code>/<code>vetev:</code>), kam nedosazený název briefu skutečně škodí (chip_run z něj zakládá větev). Ověřeno: <code>c.issues()[0]</code> chipu 12 placeholder neobsahuje, celý text ano.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#3 testy: nová třída <code>TestPlaceholdery</code> (9 testů). #2 = <code>test_brief_ze_skutecne_sablony_hlasi_vsechny_ctyri</code> nad KOPIÍ skutečné <code>chips/TEMPLATE.md</code> (jen <code>stav: draft</code>→<code>ready</code>), ověřuje všechny čtyři přes <code>zbyle_placeholdery()</code> (subTesty) i end-to-end přes výstup lintu (přesně 4 řádky). Tři falešná varování: <code>test_citace_v_logu_nevaruje</code> (08), <code>test_citace_v_proze_nevaruje</code> (09), <code>test_citace_v_textu_issue_nevaruje</code> (12). Protipól: <code>test_placeholder_v_nazvu_varuje</code>, <code>test_placeholder_ve_vetvi_varuje</code>, <code>test_placeholder_v_naroku_varuje</code>, <code>test_komentar_za_hodnotou_frontmatteru_kontrolu_nerozhodi</code>, <code>test_draft_se_na_placeholdery_nekontroluje</code>. Fixture <code>napis_brief()</code> dostal tři NEPOVINNÉ parametry (<code>vetev</code>, <code>proza</code>, <code>log</code>) — bez nich se chová bajt v bajt jako dřív, žádný stávající test se neupravoval.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#5 regresní důkaz (<code>git show HEAD~1:tools/chip_lint.py</code> → dočasný soubor, registrace do <code>sys.modules['chip_lint']</code> PŘED importem testů; ověřeno assertem <code>t.chip_lint is mod</code> + <code>isinstance(mod.PLACEHOLDERY[0], str)</code>, že jde opravdu o původní verzi): <strong>3 FAIL + 1 ERROR z 9</strong>. Hlášky tří klíčových testů — všechny „Lists differ: [...] != []": „! 01-alfa.md: zůstal placeholder ze šablony: 'kratky-nazev-s-pomlckami'" (citace v Logu), „…: 'src/parser.py'" (citace v próze), „…: 'kratky-nazev-s-pomlckami'" (citace v textu issue). ERROR: „AttributeError: module 'chip_lint' has no attribute 'zbyle_placeholdery'" u testu ze šablony. <strong>Poctivě: test ze šablony (#2) na původní verzi selhat NEMŮŽE obsahem</strong> — původní plošné hledání všechny čtyři placeholdery hlásí taky; je to pojistka proti oslabení, ne regresní důkaz, a musí být zelený na obou verzích (jeho end-to-end část na původní verzi projde). Ostatních 5 testů na původní verzi právem prošlo — hlídají, že se varovat MUSÍ. Na opravené verzi 9/9 OK.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>Brána: <code>python -m unittest discover -s tests -v</code> → <strong>422 testů, 0 selhání</strong> (před chipem 413 → +9, žádný stávající test neupraven). <code>python tools/chip_lint.py</code> <strong>PŘED</strong>: „zkontrolováno 14 chipů (1 aktivních) / ! 08-nazvy-vetvi.md: zůstal placeholder ze šablony: 'kratky-nazev-s-pomlckami' / ! 09-rezani-z-issues.md: … 'src/parser.py' / ! 12-slice-run.md: … 'kratky-nazev-s-pomlckami' / ! 15-lint-placeholdery.md: … 'src/parser.py' / … '#12 — stručný popis' / … 'C:/cesta/k/repu' / … 'kratky-nazev-s-pomlckami' / OK — 0 chyb, 7 varování" (chip 15 spouštěl všechna čtyři, protože placeholdery vyjmenovává v tabulce). <strong>PO</strong>: „zkontrolováno 14 chipů (1 aktivních) / OK — 0 chyb, 0 varování", rc 0 — 0 varování o placeholderech i 0 varování celkem (jiný druh dnes žádný není). Jen stdlib (<code>typing.NamedTuple</code>, <code>Callable</code>). Žádný T3: nic z lintu nezmlklo, co bylo chyba zůstalo chybou, cizí briefy ani <code>TEMPLATE.md</code> jsem nesáhl. <code>.html</code> k briefu nepřegenerováno (<code>md2html.py --all</code> sahá mimo NÁROK) — dělá orchestrátor po merge.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>15-lint-placeholdery.md</code> &middot; CHIP 15 — lint hlásí placeholder i tam, kde je jen citovaný</div>
+</body>
+</html>

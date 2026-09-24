@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vlna 4 — přerušeno a dokončeno</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="vlna-4-preruseno-a-dokonceno">Vlna 4 — přerušeno a dokončeno</h1>
+<p><strong>Datum:</strong> 2026-07-27 · <strong>Stav:</strong> ✅ <strong>dokončeno</strong> — 10/10 nálezů opraveno,<br />
+4 chipy zmergovány, 366 → 413 testů. Průběh dokončení je na konci dokumentu;<br />
+zbytek je záznam přerušení, ponechaný kvůli poučení z něj.</p>
+<p>Vlna 4 opravovala 10 nálezů z externího code review (workflow, 30 agentů,<br />
+adversariální verifikace). Všichni tři agenti skončili předčasně — <strong>ne kvůli<br />
+kódu</strong>, ale na limitech účtu.</p>
+<h2 id="co-se-stalo">Co se stalo</h2>
+<table>
+<thead>
+<tr>
+<th>Chip</th>
+<th>Příčina pádu</th>
+<th>Uloženo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10 hook-diry</td>
+<td>překročen limit <strong>16 000 výstupních tokenů</strong> na jednu odpověď</td>
+<td>nic — 0 změn</td>
+</tr>
+<tr>
+<td>11 lint-common</td>
+<td><strong>session limit</strong> účtu</td>
+<td>commit <code>beb6a5f</code> na <code>ai/chip-11/lint-common</code></td>
+</tr>
+<tr>
+<td>12 slice-run</td>
+<td><strong>session limit</strong> účtu</td>
+<td>commit <code>7810e9d</code> na <code>ai/chip-12/slice-run</code></td>
+</tr>
+</tbody>
+</table>
+<p>Hlavní strom <code>CHIPS</code> zůstal čistý a nedotčený — izolace zafungovala i při<br />
+trojnásobném pádu uprostřed práce.</p>
+<h2 id="stav-jednotlivych-chipu">Stav jednotlivých chipů</h2>
+<h3 id="chip-10-hook-diry-nezacato">CHIP 10 — hook-diry (nezačato)</h3>
+<p>Worktree <code>../CHIPS-chip-10</code> je čistý, žádná práce se neztratila, protože<br />
+žádná nevznikla. Agent narazil na strop <strong>jedné odpovědi</strong>, ne na limit účtu —<br />
+zadání bylo příliš husté: čtyři nezávislé opravy plus regresní důkaz ke každé.</p>
+<p><strong>Doporučení: rozříznout na dva chipy.</strong> Nálezy se dělí přirozeně:</p>
+<ul>
+<li><strong>10a — extrakce z příkazu</strong>: nález #1 (větev se bere z prvního tokenu<br />
+  místo z argumentu <code>merge</code>) a #2 (<code>cilove_repo</code> bere první <code>git -C</code>/<code>cd</code>).<br />
+  Obojí je práce s parsováním příkazové řádky.</li>
+<li><strong>10b — kdy zamítnout</strong>: nález #3 (fallback brány na hlavní strom při<br />
+  chybějícím worktree) a #4 (brána běží nad working tree, merge bere<br />
+  committed tip). Obojí je rozhodnutí „raději zamítnout než ověřit něco jiného".</li>
+</ul>
+<p>Oba dědí sekci „Dotčené soubory" z původního briefu (<code>tools/hook_chip_gate.py</code>,<br />
+<code>tests/test_chip_gate.py</code>), takže <strong>nesmí běžet paralelně</strong> — buď sériově,<br />
+nebo 10b jako navazující chip větvený z 10a.</p>
+<h3 id="chip-11-lint-common-rozpracovano-commit-beb6a5f">CHIP 11 — lint-common (rozpracováno, commit <code>beb6a5f</code>)</h3>
+<p>Hotovo podle diffu (<strong>neověřeno reviewem ani celou bránou</strong>):</p>
+<ul>
+<li>
+<h1 id="1-prekryv-kolize-adresar-glob">1 <code>prekryv()</code> — kolize adresář × glob</h1>
+</li>
+<li>
+<h1 id="2-strom_ke_kontrole-overovani-proti-spravnemu-repu">2 <code>strom_ke_kontrole()</code> — ověřování proti správnému repu</h1>
+</li>
+</ul>
+<p>Zbývá: #3 absolutní glob shodí lint tracebackem, #4 cesta s <code>#</code> ve jméně,</p>
+<h1 id="5-regresni-dukazy-ke-vsem-opravam-6-kontrola-stavajici-sady">5 regresní důkazy ke všem opravám, #6 kontrola stávající sady.</h1>
+<p>Sada v tom stromě prochází (<strong>373 testů OK</strong>), ale brána nebyla spuštěna celá<br />
+a Definition of done není ověřená.</p>
+<h3 id="chip-12-slice-run-rozpracovano-commit-7810e9d">CHIP 12 — slice-run (rozpracováno, commit <code>7810e9d</code>)</h3>
+<p>Rozeditovaných 5 souborů, +131 řádků v <code>chip_slice.py</code>, <code>chip_run.py</code><br />
+a jejich testech. Sada prochází (<strong>366 testů OK</strong>), brána nespuštěna,<br />
+DoD neověřena. Které z issues #1–#6 jsou hotové, se musí zjistit z diffu —<br />
+agent to nestihl zapsat do Logu.</p>
+<h2 id="jak-pokracovat">Jak pokračovat</h2>
+<ol>
+<li><strong>Nepouštět znovu od nuly.</strong> Práce chipů 11 a 12 je v gitu; agent musí<br />
+   dostat brief <strong>plus informaci, co už je hotové</strong>, ať to nepřepisuje.</li>
+<li>Ověřit rozdělaný stav: <code>git -C ../CHIPS-chip-NN diff a827840..HEAD</code><br />
+   a projít, které issues jsou splněné.</li>
+<li><strong>Chip 10 nejdřív rozřezat</strong> podle návrhu výše — pouštět ho v původní<br />
+   podobě znamená narazit na týž strop.</li>
+<li>Po dokončení: brána v každém worktree, kontrola rozsahu proti nároku,<br />
+   celá sada na hlavní větvi po každém merge.</li>
+<li>Nálezy z review pak nahlásit s <code>outcome</code> (fixed / skipped / no_change_needed).</li>
+</ol>
+<h2 id="poznamka-k-odhadum">Poznámka k odhadům</h2>
+<p>Chip 10 je první případ, kdy zadání narazilo na <strong>limit jedné odpovědi</strong>, ne<br />
+na spotřebu celkem. Do odhadů z metodiky (~100 tis. tokenů na chip) tedy patří<br />
+druhá mez: <strong>hustota zadání</strong>. Čtyři nezávislé opravy s regresním důkazem ke<br />
+každé se do jedné odpovědi nevejdou — a projeví se to až pádem, ne varováním.</p>
+<hr />
+<h2 id="jak-to-dopadlo">Jak to dopadlo</h2>
+<p>Vlna byla dokončena týž den po resetu limitů. Výsledek: <strong>10/10 nálezů<br />
+opraveno</strong>, čtyři chipy zmergovány, sada <strong>366 → 413 testů</strong>, lint 0 chyb.</p>
+<table>
+<thead>
+<tr>
+<th>Chip</th>
+<th>Výsledek</th>
+<th>Testy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12 slice-run</td>
+<td>byl <strong>hotový celý</strong> — stačilo ověřit bránu a mergnout</td>
+<td>366</td>
+</tr>
+<tr>
+<td>11 lint-common</td>
+<td>kód a testy hotové z WIP, doplněn regresní důkaz a Log</td>
+<td>373 → 379 na masteru</td>
+</tr>
+<tr>
+<td>13 hook-extrakce</td>
+<td>odkud hook bere větev a repo (z chipu 10)</td>
+<td>396</td>
+</tr>
+<tr>
+<td>14 hook-zamitani</td>
+<td>kdy má hook zamítnout (z chipu 10)</td>
+<td>413</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rozriznuti-chipu-10-chipy-13-a-14">Rozříznutí chipu 10 → chipy 13 a 14</h3>
+<p><strong>Ne 10a/10b, jak zněl původní návrh.</strong> Hook i brána matchují číslo chipu jako<br />
+<code>(\d+)</code>, takže větev <code>ai/chip-10a/…</code> by se rozpoznala jako <strong>chip 10</strong> a brána<br />
+by ověřovala cizí brief. Pojmenování se přizpůsobilo nástroji, protože nástroj<br />
+je vynucovací bod.</p>
+<p>Dělicí čára vedla <strong>podle povahy práce, ne podle počtu nálezů</strong>: chip 13 =<br />
+parsování příkazové řádky, chip 14 = rozhodovací pravidla. Mechanické dělení<br />
+„dva a dva" by agenta nutilo přepínat mezi dvěma způsoby uvažování — přesně ta<br />
+hustota, na které původní chip 10 umřel.</p>
+<h3 id="co-se-ukazalo-navic">Co se ukázalo navíc</h3>
+<ul>
+<li><strong>Záchranný zápis podceňoval hotovou práci.</strong> Chip 12 byl hotový celý včetně<br />
+  Logu a odškrtané DoD; chip 11 měl všechny čtyři opravy nakódované a pokryté<br />
+  13 testy. Poučení: <strong>než pustíš agenta na „rozdělaný" chip, přečti diff</strong> —<br />
+  ne poznámku o něm.</li>
+<li><strong>Agent chipu 13 našel třetí nález, který code review minul</strong>: octopus merge<br />
+  (<code>git merge A B</code>) ověřoval bránu jen první větve a druhou pustil bez kontroly.<br />
+  Vyplynulo to z opravy #1 — když se větve berou z argumentů za <code>merge</code>,<br />
+  je vidět, že argumentů může být víc.</li>
+<li><strong>Agent chipu 11 našel díru ve vlastní Definition of done.</strong> DoD zněla „lint<br />
+  nad ERP-CHIPS vrátí 0 chyb"; to vracela i rozbitá verze, protože všech 11<br />
+  briefů je <code>draft</code> a kontrola cest se na ně nespustí. Doložil to tedy přímým<br />
+  měřením návratové hodnoty <code>strom_ke_kontrole()</code>. <strong>DoD ve tvaru „nástroj<br />
+  vrátí 0 chyb" je slabá</strong>, pokud nedokazuje, že kontrola vůbec proběhla.</li>
+<li><strong><code>--uklid</code> patří až po mergi.</strong> Nový hook zamítne merge, když worktree chipu<br />
+  chybí — po úklidu tedy chip nejde mergnout. Navíc: po <code>--uklid</code> zůstávají<br />
+  adresáře bez <code>.git</code>, takže <code>is_dir()</code> na ně sedne a chybějící worktree<br />
+  odhalí až <code>git status</code>.</li>
+<li><strong><code>git worktree remove</code> v tomhle prostředí padá</strong> na <code>Permission denied</code><br />
+  u mazání, i když commit a merge projdou. Obejití: <code>git branch -d</code> + smazání<br />
+  adresáře přes PowerShell <code>Remove-Item -Recurse -Force</code>.</li>
+</ul>
+<div class="doc-foot">Vygenerováno z <code>vlna-4-preruseno.md</code> &middot; Vlna 4 — přerušeno a dokončeno</div>
+</body>
+</html>

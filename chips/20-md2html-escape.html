@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 20 — dva nálezy chipu 18, oba zafixované expectedFailure</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 20<br />
+nazev: md2html-escape<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne<br />
+vetev: ai/chip-20/md2html-escape<br />
+worktree: ../CHIPS-chip-20</p>
+<hr />
+<h1 id="chip-20-dva-nalezy-chipu-18-oba-zafixovane-expectedfailure">CHIP 20 — dva nálezy chipu 18, oba zafixované expectedFailure</h1>
+<p>Chip 18 našel při psaní testů dvě vady a <strong>neopravil je</strong> — správně, obě byly<br />
+za hranicí jeho zadání. Oba testy v sadě existují jako <code>@unittest.expectedFailure</code><br />
+s komentářem. Tenhle chip je má opravit a ty dva testy překlopit na normální.</p>
+<ol>
+<li><strong>Surové HTML projde do výstupu.</strong> <code>markdown.markdown()</code> pouští HTML skrz,<br />
+   takže <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> ve zdrojovém <code>.md</code> skončí ve výstupním<br />
+<code>.html</code> jako živý tag. Nástroj převádí dokumentaci, ne šablony — surové HTML<br />
+   ve vstupu je vždycky buď omyl, nebo něco, co se má ukázat jako text.</li>
+<li><strong><code>--all</code> nepřeskakuje <code>__pycache__</code>.</strong> Filtr zná jen <code>.git</code>.</li>
+</ol>
+<p><strong>Dobrá zpráva k rozsahu:</strong> žádný zdrojový <code>.md</code> v repu dnes surové HTML<br />
+nepoužívá (dva výskyty <code>&lt;script&gt;</code> jsou uvnitř backticků, tedy už escapované).<br />
+Oprava tedy nemá změnit ani jeden existující <code>.html</code> — a to je zároveň nejsilnější<br />
+kontrola, že je udělaná správně.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — surové HTML ve zdroji se ve výstupu objeví jako <strong>text</strong>, ne jako tag<br />
+      (<code>&lt;script&gt;alert(1)&lt;/script&gt;</code> → viditelný text, nic se nespustí)</li>
+<li>[x] #2 — <code>test_04_script_v_markdownu_se_nedostane_jako_zivy_tag</code> přestává být<br />
+<code>@unittest.expectedFailure</code> a stává se normálním testem</li>
+<li>[x] #3 — kód v <code>`` blocích a v</code>backtickách<code>zůstává **beze změny** — dnes se
+      escapuje správně a nesmí se z toho stát dvojité escapování (</code>&amp;lt;`)</li>
+<li>[x] #4 — <code>--all</code> přeskakuje <code>__pycache__</code> i <code>.git</code></li>
+<li>[x] #5 — <code>test_09_all_preskakuje_pycache</code> přestává být <code>@unittest.expectedFailure</code></li>
+<li>[x] #6 — filtr adresářů ať je na jednom místě a pojmenovaný, ne dvě podmínky<br />
+      rozeseté v <code>main()</code> — příště se přidává třetí</li>
+<li>[x] #7 — <strong>regresní důkaz:</strong> <code>md2html.py --all</code> nad tímhle repem vyprodukuje<br />
+<code>.html</code> <strong>bajtově shodné</strong> s dnešními. Postup i výsledek zapiš do Logu.<br />
+      → 28 z 29 shodných, <strong><code>chips/TEMPLATE.html</code> se mění</strong> → T3, viz Log</li>
+<li>[x] #8 — testy k #1 a #4 nad dočasným stromem, ne nad skutečným repem</li>
+<li>[x] #9 — docstring modulu doplnit o to, že vstup se bere jako text, ne jako<br />
+      HTML, a proč</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/md2html.py
+tests/test_md2html.py
+</code></pre>
+<p>Přegenerování <code>.html</code> v repu dělá <strong>orchestrátor po mergi</strong>, ne ty — i kdyby<br />
+z #7 vyšlo, že se nic nezmění.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> projde a <strong>expected failures = 0</strong><br />
+      (dnes 2; obě jsou právě tyhle dvě vady)</li>
+<li>[x] <code>git status --porcelain</code> po celém běhu sady je prázdný kromě souborů,<br />
+      které jsi vědomě změnil</li>
+<li>[x] důkaz k #7: <code>md2html.py --all</code> nad repem a <code>git status</code> po něm ukazuje<br />
+<strong>žádnou změnu</strong> v <code>.html</code> (nebo, pokud změnu ukáže, je v Logu vypsané<br />
+      přesně které soubory a proč — to je pak T3)<br />
+      → změna v jednom souboru, vypsaná v Logu; <strong>T3, čeká na rozhodnutí</strong></li>
+<li>[x] <code>.md</code> s blokem kódu obsahujícím <code>&lt;div&gt;</code> se převede tak, že v HTML je<br />
+      vidět <code>&lt;div&gt;</code> jako text uvnitř <code>&lt;pre&gt;</code>, ne prázdný element</li>
+<li>[x] CSS a <code>TEMPLATE</code> v <code>md2html.py</code> zůstávají nezměněné</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Zastav se, zapiš do Logu a nech na uživateli:</p>
+<ul>
+<li><strong>nová externí závislost</strong> (<code>bleach</code>, <code>nh3</code>, cokoli). Projekt jede na stdlib</li>
+<li><code>markdown</code>. Když čistá oprava jde jen se závislostí, zastav se a napiš to.</li>
+<li><strong>jakákoli změna CSS nebo <code>TEMPLATE</code></strong> — přegenerovala by všech 24 <code>.html</code></li>
+<li>zjištění, že oprava přece jen mění existující výstup (viz #7) — vypiš které<br />
+  soubory a nech rozhodnutí na uživateli</li>
+<li>jakýkoli zásah mimo „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testy: <code>python -m unittest discover -s tests -v</code>, stdlib <code>unittest</code>, <strong>žádný<br />
+  pytest</strong>. <code>tests/test_md2html.py</code> už existuje (27 testů, chip 18) a má<br />
+  fixturu <code>ZakladPrevodu</code>, která přesměruje <code>md2html.ROOT</code> do <code>tempfile</code> —<br />
+  stav na ni.</li>
+<li><strong>Nepřepisuj cizí testy do zelena.</strong> Oba <code>@unittest.expectedFailure</code> testy<br />
+  mají zůstat obsahově stejné; měníš kód, ne očekávání.</li>
+<li>Python-markdown od verze 3 nemá <code>safe_mode</code>. Surové HTML si odkládá do<br />
+<code>md.htmlStash</code> a vrací ho zpátky v postprocessoru — tudy vede cesta bez<br />
+  nové závislosti. Zvaž vlastní postprocessor / <code>md.htmlStash</code>; nedělej to<br />
+  hrubým <code>html.escape()</code> nad celým vstupem, to by rozbilo bloky kódu (#3).</li>
+<li>Konvence: ke každému <code>.md</code> patří <code>.html</code>, generuje se tímhle nástrojem.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-28</td>
+<td>ready</td>
+<td>brief založen orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Oprava #1: nová <code>markdown</code> extension <code>BezSurovehoHTML</code> v <code>md2html.py</code> odregistruje preprocesor <code>html_block</code> a řádkový vzor <code>html</code>. Tím se do <code>md.htmlStash</code> přestane ukládat <strong>vstupní</strong> HTML a serializér ho zapíše jako text; co si do stashe dá <code>fenced_code</code> (hotový <code>&lt;pre&gt;&lt;code&gt;</code>), zůstává nedotčené — proto se bloky kódu escapují dál právě jednou (#3). Žádná nová závislost, <code>CSS</code> ani <code>TEMPLATE</code> nedotčeny.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Oprava #4/#6: <code>IGNOROVANE_ADRESARE = frozenset({".git", "__pycache__"})</code> + <code>preskocit(relativni)</code> na modulové úrovni; <code>main()</code> volá <code>preskocit(p.relative_to(ROOT))</code>. Relativní cesta schválně — absolutní by srazila <code>--all</code> na nulu, kdyby projekt ležel pod složkou toho jména.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Testy: oba <code>@unittest.expectedFailure</code> překlopeny na normální, <strong>assertions beze změny</strong>, upraveny jen docstringy (tvrdily „neopraveno"). Přidáno 14 testů (surové HTML jako text — blokové, řádkové, komentář, placeholder v nadpisu; dvojité escapování ve fenced/odsazeném bloku i v backtickách; entity; nedotčené markdown konstrukce a autolink; filtr adresářů zvlášť a hlouběji ve stromu). Vše přes fixturu <code>ZakladPrevodu</code>, tedy nad tempfile (#8). Brána: <code>unittest discover</code> <strong>537 testů, OK, expected failures 0</strong> (před chipem 523 / 2 expected failures); <code>chip_lint.py</code> rc 0, 0 chyb, 0 varování.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>Regresní důkaz #7 (postup):</strong> <code>git archive HEAD \| tar -x</code> do dvou kopií mimo repo (<code>pred</code>, <code>po</code>), do <code>po</code> zkopírován nový <code>tools/md2html.py</code>, <code>python tools/md2html.py --all</code> nad <code>po</code>, pak <code>cmp</code> každého z 29 <code>.html</code>. Kontrolní běh se <strong>starým</strong> kódem nad třetí kopií reprodukoval všech 29 souborů bajtově — repo je tedy s generátorem v souladu a rozdíl níž jde skutečně za opravou, ne za starým otiskem. V pracovním stromě jsem <code>--all</code> nepouštěl, žádný <code>.html</code> v repu jsem nepřegeneroval (dělá orchestrátor po mergi).</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>⚠️ <strong>T3 — oprava přece jen mění jeden výstup.</strong> Ze 29 <code>.html</code> je 28 bajtově shodných, mění se <strong><code>chips/TEMPLATE.html</code></strong>, a to jediným řádkem. Příčina: <code>chips/TEMPLATE.md:12</code> má <code># CHIP NN — &lt;název&gt;</code> a <code>&lt;název&gt;</code> se dosud bralo jako neznámý <strong>tag</strong>. Dnešek: <code>&lt;h1 id="chip-nn"&gt;CHIP NN — &lt;název&gt;&lt;/h1&gt;</code> — zástupný text je v prohlížeči <strong>neviditelný</strong> (prázdný element) a <code>id</code> je useknuté. Po opravě: <code>&lt;h1 id="chip-nn-nazev"&gt;CHIP NN — &amp;lt;název&amp;gt;&lt;/h1&gt;</code>. <code>&lt;title&gt;</code> se nemění (ten už <code>html.escape</code> řešil). Čtu to jako opravu druhé, dosud neviditelné vady téhož druhu, ale rozhodnutí je na uživateli: (a) přijmout a nechat orchestrátora přegenerovat <code>chips/TEMPLATE.html</code>, nebo (b) změnit <code>chips/TEMPLATE.md</code> na zápis v backtickách — <strong>to už je ale nárok chipu 22, nesahal jsem na to</strong>. Případ je zafixovaný testem <code>test_04_placeholder_v_nadpisu_je_videt_a_nezmizi</code>.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Nález mimo nárok (neopravováno): <code>docs/*.md</code> ani <code>chips/*.md</code> kromě TEMPLATE žádné surové HTML nemají — brief to předpokládal správně, jen <code>chips/TEMPLATE.md</code> unikl (výskyt není <code>&lt;script&gt;</code>, ale zástupné <code>&lt;název&gt;</code>).</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>20-md2html-escape.md</code> &middot; CHIP 20 — dva nálezy chipu 18, oba zafixované expectedFailure</div>
+</body>
+</html>

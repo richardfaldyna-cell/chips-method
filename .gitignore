@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+
+# HTML se generuje z .md pres tools/md2html.py --all
+# (verzovane zamerne - konvence workspace)
+
+# Vystup chip_dashboard.py: nema .md zdroj, je to snimek okamziku a zmergovany
+# by tvrdil stav, ktery uz neplati. Rozhodnuti chipu 23.
+dashboard.html

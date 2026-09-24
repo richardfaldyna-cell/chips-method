@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: NN<br />
+nazev: kratky-nazev-s-pomlckami<br />
+stav: draft</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<h1 id="jina-hodnota-nez-tahle-sestice-je-pro-chip_lintpy-chyba-slovnik-je-tady">Jiná hodnota než tahle šestice je pro <code>chip_lint.py</code> chyba (slovník je tady,</h1>
+<h1 id="protoze-agent-drzi-v-ruce-brief-ne-metodiku">protože agent drží v ruce brief, ne metodiku):</h1>
+<h1 id="draft-brief-se-pise-hranice-jeste-nejsou-jiste">draft   — brief se píše, hranice ještě nejsou jisté</h1>
+<h1 id="ready-vyplneny-brief-chip_lintpy-cisty-smi-se-pustit">ready   — vyplněný brief, <code>chip_lint.py</code> čistý → smí se pustit</h1>
+<h1 id="running-bezi-ve-worktree">running — běží ve worktree</h1>
+<h1 id="gated-prace-hotova-ceka-na-branu">gated   — práce hotová, čeká na bránu</h1>
+<h1 id="merged-brana-zelena-slouceno-worktree-uklizen">merged  — brána zelená, sloučeno, worktree uklizen</h1>
+<h1 id="blocked-narazil-na-t3-nebo-brana-selhala-ceka-na-rozhodnuti-cloveka">blocked — narazil na T3 nebo brána selhala → čeká na rozhodnutí člověka</h1>
+<p>zavisi_na:           # ID chipů, které musí být 'merged' dřív, např. 00, 01<br />
+repo: C:/cesta/k/repu<br />
+greenfield: ne       # 'ano' = repo teprve vznikne; lint pak neexistenci repa a cest jen varuje<br />
+vetev: ai/chip-NN/kratky-nazev-s-pomlckami   # prefix ai/ = kód psal AI agent (audit v git logu); prázdné = odvodí chip_run.py<br />
+worktree: ../repo-chip-NN</p>
+<hr />
+<h1 id="chip-nn-nazev">CHIP NN — &lt;název&gt;</h1>
+<p>Jednou větou, co tenhle balíček řeší.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[ ] #12 — stručný popis</li>
+<li>[ ] #13 — stručný popis</li>
+<li>[ ] #14 — stručný popis</li>
+</ul>
+<blockquote>
+<p>Strop: 10–20 issues. Víc → rozřež na dva chipy.</p>
+</blockquote>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<p>Seznam souborů/adresářů, které tenhle chip smí měnit. <strong>Žádný jiný chip je nesmí<br />
+mít v seznamu</strong> — kontroluje <code>tools/chip_lint.py</code>.</p>
+<pre><code>src/parser.py
+src/parser_utils.py
+src/parser_cache.py      # nový — chip ho teprve vytvoří
+tests/*.py
+</code></pre>
+<p>Cesty jsou <strong>relativní k <code>repo:</code></strong> (bez <code>..</code>, bez disku). Ve stavu <code>ready</code> lint<br />
+ověří, že v repu opravdu existují — soubor, který teprve vznikne, označ <code># nový</code>,<br />
+jinak je nárok hlášený jako překlep. Vzory (<code>src/*.py</code>) fungují a pro kontrolu<br />
+kolizí se rozbalují na konkrétní soubory.</p>
+<p>Poznámka za cestou se odděluje <strong>dvěma a více mezerami</strong> před <code>#</code>. Jedna mezera<br />
+se bere jako součást jména, aby se cesta <code>docs/plan #1.md</code> neusekla na <code>docs/plan</code>.</p>
+<p>Soubory mimo tento seznam se <strong>nemění</strong>. Když je to nutné → eskalace (viz níže).</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<p>Musí jít ověřit příkazem, ne názorem.</p>
+<ul>
+<li>[ ] <code>pytest tests/test_parser.py</code> projde beze změny počtu testů</li>
+<li>[ ] <code>ruff check src/parser.py</code> bez nálezů</li>
+<li>[ ] <code>parser.py</code> má &lt; 300 řádků</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, otevři PR.</p>
+<pre><code class="language-bash">pytest -q
+python -m build
+python smoke_test.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, otevři PR s otázkou, nehádej.</strong></p>
+<ul>
+<li>změna veřejného API nebo formátu dat</li>
+<li>migrace schématu / nevratná operace nad daty</li>
+<li>nová závislost nebo změna licence</li>
+<li>bezpečnostní rozhodnutí, cokoli se secrets</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<p>Co potřebuje vědět, aby nemusel hádat: konvence projektu, kde jsou testy,<br />
+známé gotchas, odkazy na dokumentaci.</p>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>YYYY-MM-DD</td>
+<td>draft</td>
+<td>založeno</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>TEMPLATE.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 09 — `chip_slice.py`: návrh řezu z fronty úkolů</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 09<br />
+nazev: rezani-z-issues<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-09/rezani-z-issues<br />
+worktree: ../CHIPS-chip-09</p>
+<hr />
+<h1 id="chip-09-chip_slicepy-navrh-rezu-z-fronty-ukolu">CHIP 09 — <code>chip_slice.py</code>: návrh řezu z fronty úkolů</h1>
+<p>Řezání dnes dělá člověk ručně. U stovky issues je to úzké hrdlo — a přitom<br />
+kritérium je mechanické: <strong>disjunktnost souborů</strong>. Tenhle nástroj z fronty úkolů<br />
+navrhne rozdělení na chipy a řekne, co je sporné.</p>
+<p>Nástroj <strong>nerozhoduje</strong> — připraví návrh, který člověk opraví. Automatický řez<br />
+bez kontroly by porušoval pravidlo 5 (eskalace místo hádání).</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — načíst úkoly z <code>TODO.md</code> ve formátu <code>- [ ]</code> (výchozí zdroj)</li>
+<li>[x] #2 — <code>--json &lt;soubor&gt;</code> jako alternativní vstup: seznam<br />
+<code>{"id", "popis", "soubory": [...]}</code> (odtud půjde napojit GitHub issues)</li>
+<li>[x] #3 — u úkolu bez uvedených souborů zkusit odhad: cesty zmíněné přímo<br />
+      v textu úkolu (tvar <code>adresar/soubor.pripona</code>) — nic víc, <strong>nehádat</strong></li>
+<li>[x] #4 — seskupit úkoly do skupin tak, aby se skupiny <strong>nepřekrývaly</strong> v souborech<br />
+      (souvislé komponenty grafu „úkol–soubor"); vzájemně se dotýkající úkoly<br />
+      musí skončit v jedné skupině</li>
+<li>[x] #5 — respektovat strop: skupina nad 20 úkolů nebo nad 15 souborů se označí<br />
+<code>PŘÍLIŠ VELKÁ</code> s návrhem rozřezat</li>
+<li>[x] #6 — úkoly <strong>bez jediného známého souboru</strong> vypsat zvlášť jako<br />
+<code>NEZAŘAZENO — doplň soubory ručně</code>, nikdy je nikam netipovat</li>
+<li>[x] #7 — výstup: přehled navržených skupin + <code>--zapsat &lt;adresář&gt;</code> vygeneruje<br />
+      draft briefy ze šablony (<code>stav: draft</code>, vyplněné Issues a Dotčené soubory)</li>
+<li>[x] #8 — vygenerované briefy musí projít <code>chip_lint.py</code> ve stavu <code>draft</code></li>
+<li>[x] #9 — návratový kód 0 (je to návrh, ne brána)</li>
+<li>[x] #10 — testy: překryv dvou úkolů, řetěz tří úkolů přes společný soubor,<br />
+      osamocený úkol, úkol bez souborů, překročení stropu, prázdný vstup</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_slice.py         # nový
+tests/test_chip_slice.py    # nový
+</code></pre>
+<p>Nesahej na žádný jiný nástroj — <code>chip_run.py</code>, <code>chip_gate.py</code>,<br />
+<code>hook_chip_gate.py</code> a <code>TEMPLATE.md</code> si nárokuje chip 08, <code>chip_review.py</code> chip 07.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>python tools/chip_slice.py --todo TODO.md</code> na tomhle repu vypíše smysluplný<br />
+      návrh (ověř ručně, výstup dej do Logu)</li>
+<li>[x] <code>--zapsat</code> vygeneruje briefy, které projdou <code>chip_lint.py</code></li>
+<li>[x] žádná skupina ve výstupu nesdílí soubor s jinou skupinou (pokryto testem)</li>
+<li>[x] pouze standardní knihovna</li>
+<li>[x] alespoň 15 testovacích metod</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_slice.py --todo TODO.md
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li><strong>nehádej soubory</strong> k úkolu, který je neuvádí — takový úkol patří do<br />
+<code>NEZAŘAZENO</code>. Odhad by vypadal jako informace a přitom by nebyl.</li>
+<li>změna formátu briefu nebo šablony (šablonu vlastní chip 08)</li>
+<li>automatické spouštění chipů z návrhu (<code>chip_run</code>) — nástroj jen navrhuje</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Šablonu čti z <code>chips/TEMPLATE.md</code> (vlastní ji chip 08, ty ji jen <strong>čteš</strong>),<br />
+  ne z natvrdo zapsaného řetězce — jinak vyhnije.</li>
+<li>Skupiny jsou souvislé komponenty bipartitního grafu úkol–soubor. Union-find<br />
+  nebo prostý BFS; obojí stdlib.</li>
+<li><code>chip_common</code> umí <code>nacti_vse</code>, <code>pridej_arg_dir</code>, <code>utf8_vystup</code>; <code>chip_lint.prekryv</code><br />
+  a <code>vzor</code> můžeš <strong>importovat</strong> na porovnání cest (číst cizí modul je v pořádku).</li>
+<li>Formát TODO odrážky viz <code>chip_common.ISSUE</code> — použij ho, ať se to nerozejde.</li>
+<li>Vzor CLI a stylu výstupu: <code>chip_status.py</code>.</li>
+<li>Pojmenování skupin: <code>01</code>, <code>02</code>, … podle pořadí; číslo musí jít přepsat, protože<br />
+  v cílovém adresáři už nějaké chipy být můžou — ošetři kolizi (nepřepisuj cizí soubor).</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno z poznatků NotebookLM (orchestrátor čte frontu issues)</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td><code>chip_slice.py</code> + 45 testů; brána zelená (282 testů, lint 0 chyb)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>merged</td>
+<td>Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="nalezy">Nálezy</h3>
+<p><strong>N1 — „nehádat" muselo dostat tvrdé pravidlo, jinak se rozteče.</strong> Issue #3 říká<br />
+„cesty zmíněné přímo v textu (tvar <code>adresar/soubor.pripona</code>)". Nad skutečným<br />
+<code>TODO.md</code> tohohle repa to samo o sobě zařadí <strong>jeden</strong> úkol z deseti — většina<br />
+odrážek mluví o <code>chip_lint.py</code>, <code>chip_common.py</code> bez adresáře. Řešení, které<br />
+není hádání: <strong>holé jméno se bere jen v backticích a jen když se v repu dohledá<br />
+právě jeden takový soubor</strong> (0 shod = soubor tu není, 2+ = neví se který →<br />
+obojí jde do NEZAŘAZENO a jméno se vypíše jako „nedohledáno"). Je to ověření<br />
+proti stromu, ne odhad. Vypíná se <code>--bez-dohledani</code>.</p>
+<p><strong>N2 — odrážky se v <code>TODO.md</code> lámou přes víc řádků a cesta bývá až na druhém.</strong><br />
+Kdyby se braly jen řádky, na které sedne <code>chip_common.ISSUE</code>, zmizel by nárok<br />
+u poloviny úkolů (např. <code>_pilot-repo/VYSLEDEK.md</code>). Parser proto přilepuje<br />
+odsazené pokračovací řádky. Odškrtnuté (<code>- [x]</code>) se přeskakují — hotová práce<br />
+se neřeže.</p>
+<p><strong>N3 — šablona nese příklady, které by se ve vygenerovaném briefu četly jako<br />
+tvrzení.</strong> <code>TEMPLATE.md</code> má v Definition of done <code>pytest tests/test_parser.py</code><br />
+a v bráně <code>python -m build</code>. Kopie do draftu by vypadala jako vyplněná brána,<br />
+která ale nikdy neběžela. Generátor obě sekce <strong>vyprázdní</strong> na výzvu „doplň<br />
+ručně" — nástroj podmínky brány nevymýšlí. (Vedlejší efekt: mizí i placeholder<br />
+<code>src/parser.py</code>, který by <code>chip_lint</code> hlásil při přepnutí na <code>ready</code>.)</p>
+<p><strong>N4 — číslování skupin musí počítat s cizími chipy v cílovém adresáři.</strong><br />
+<code>volne_cislo()</code> přeskočí obsazená dvojčíslí a existující soubor se nikdy<br />
+nepřepíše (ověřeno testem <code>test_kolize_cisla_neprepise_cizi_soubor</code>).</p>
+<h3 id="skutecny-vystup-nad-todomd-tohohle-repa">Skutečný výstup nad <code>TODO.md</code> tohohle repa</h3>
+<pre><code>  Návrh řezu: 2 skupiny, 2 zařazených, 8 nezařazených úkolů
+
+  skupina 01  (1 úkol, 1 soubor)
+    - #1 **Rozhodnout o merge výsledků pilotu na `pilot-repo`** …
+    soubory: _pilot-repo/VYSLEDEK.md
+
+  skupina 02  (1 úkol, 2 soubory)
+    - #7 `git_koren()` / `strom_ke_kontrole()` z `chip_lint.py` přesunout do
+      `chip_common.py` …
+    soubory: tools/chip_common.py, tools/chip_lint.py
+
+  NEZAŘAZENO — doplň soubory ručně (nástroj je nehádá): #2 #3 #4 #5 #6 #8 #9 #10
+</code></pre>
+<p>Osm z deseti nezařazených <strong>je ten správný výsledek</strong>, ne selhání: ty úkoly<br />
+opravdu neříkají, čeho se dotknou. <code>#2</code> navíc ukazuje odmítnutí odhadu s důvodem<br />
+— <code>pbip_fix_visual_titles.py</code> v tomhle repu není, takže se nedohledal.</p>
+<div class="doc-foot">Vygenerováno z <code>09-rezani-z-issues.md</code> &middot; CHIP 09 — `chip_slice.py`: návrh řezu z fronty úkolů</div>
+</body>
+</html>

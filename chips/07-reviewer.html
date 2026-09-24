@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 07 — `chip_review.py`: nezávislá kontrola chipu</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 07<br />
+nazev: reviewer<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-07/reviewer<br />
+worktree: ../CHIPS-chip-07</p>
+<hr />
+<h1 id="chip-07-chip_reviewpy-nezavisla-kontrola-chipu">CHIP 07 — <code>chip_review.py</code>: nezávislá kontrola chipu</h1>
+<p>Brána je dnes jen tak přísná, jak přísné jsou testy — a ty píše <strong>týž model</strong>,<br />
+který psal kód. Zdroje o multiagentním vývoji na to shodně nasazují oddělenou<br />
+QA/reviewer roli. Tenhle chip pro ni staví nástroj: co jde ověřit strojově,<br />
+ověří sám; zbytek předá druhému agentovi jako zadání.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>python tools/chip_review.py NN</code> sesbírá fakta o hotovém chipu:<br />
+      soubory v commitu, diff stat, seznam nárokovaných cest, stav briefu</li>
+<li>[x] #2 — <strong>kontrola rozsahu</strong>: soubor změněný mimo sekci „Dotčené soubory"<br />
+      je nález (kromě vlastního briefu chipu a jeho <code>.html</code>)</li>
+<li>[x] #3 — <strong>podezřelé testy</strong>: testovací metoda bez jediného <code>assert*</code>/<code>with self.assertRaises</code>,<br />
+      metoda označená <code>@unittest.skip</code>, <code>expectedFailure</code> — vypiš je jmenovitě</li>
+<li>[x] #4 — <strong>DoD vs. realita</strong>: odškrtnuté body Definition of done vypiš vedle<br />
+      sebe s příkazy brány, ať jde porovnat, co je ověřené a co jen odškrtnuté</li>
+<li>[x] #5 — spočítej poměr přidaných řádků testů k přidaným řádkům kódu<br />
+      (hrubý ukazatel, ne verdikt — vypiš, nekomentuj)</li>
+<li>[x] #6 — <code>--zadani</code> vypíše <strong>zadání pro reviewer agenta</strong>: co má přečíst,<br />
+      na co se ptát a co NESMÍ (opravovat kód, mergovat, měnit brief)</li>
+<li>[x] #7 — návratový kód: 1 při nálezu v #2 (rozsah je tvrdé pravidlo),<br />
+      0 při ostatních (jsou to podklady pro člověka/agenta, ne verdikt)</li>
+<li>[x] #8 — <code>--repo</code> pro kontrolu chipu v cizím repu (pilot na <code>pilot-repo</code>)</li>
+<li>[x] #9 — testy pro #1–#8 nad dočasným repem s připraveným commitem</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_review.py         # nový
+tests/test_chip_review.py    # nový
+</code></pre>
+<p>Nesahej na <code>chip_run.py</code>, <code>chip_gate.py</code>, <code>hook_chip_gate.py</code> ani <code>chip_common.py</code><br />
+— první tři si nárokuje souběžný chip 08. Co potřebuješ, měj lokálně a zapiš<br />
+do Logu jako kandidáta na sloučení.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>python tools/chip_review.py 07 --repo &lt;vlastní worktree&gt;</code> doběhne a vypíše<br />
+      přehled; ověř to na sobě samém</li>
+<li>[x] kontrola rozsahu odhalí uměle podstrčený soubor mimo nárok (pokryto testem)</li>
+<li>[x] detekce testu bez assertu funguje na syntetickém příkladu</li>
+<li>[x] pouze standardní knihovna</li>
+<li>[x] alespoň 15 testovacích metod</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna <code>chip_run.py</code>, <code>chip_gate.py</code>, <code>hook_chip_gate.py</code>, <code>chip_common.py</code> (chip 08)</li>
+<li>nová závislost mimo stdlib</li>
+<li><strong>nedělej z reviewu bránu, která blokuje merge</strong> — o tom rozhoduje uživatel;<br />
+  tenhle nástroj podklady sbírá, nerozhoduje</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Vzor stylu: <code>chip_status.py</code> (tabulka) a <code>chip_gate.py</code> (spouštění + hlášení).<br />
+  Import <code>from chip_common import ...</code>, <code>pridej_arg_dir(ap)</code>, <code>utf8_vystup()</code>,<br />
+  dvě mezery odsazení, <code>X</code> chyba / <code>!</code> varování, hlášky česky.</li>
+<li>Chip má <code>.soubory()</code> (nárokované cesty), <code>.issues()</code>, <code>.hotove_issues()</code>,<br />
+<code>.najdi("definition of done")</code>, <code>.meta["vetev"]</code>, <code>.repo_path()</code>.</li>
+<li>Soubory v commitu zjistíš <code>git -C &lt;repo&gt; show --name-only --format= HEAD</code><br />
+  (přes <code>subprocess</code>, vzor v <code>chip_gate.spust</code>).</li>
+<li>Na porovnání cesty s nárokem použij stejnou logiku jako <code>chip_lint.prekryv</code><br />
+  — ale <strong>nekopíruj ji</strong>, importuj: <code>from chip_lint import prekryv, vzor</code>.<br />
+  (Čtení cizího modulu je v pořádku, jeho změna ne.)</li>
+<li>Detekci assertů dělej přes <code>ast</code>, ne regexem: hledej <code>unittest.TestCase</code><br />
+  třídy, v nich metody <code>test_*</code>, a v jejich těle volání <code>self.assert*</code>,<br />
+<code>self.fail</code>, <code>with self.assertRaises</code>. <code>ast</code> je stdlib.</li>
+<li>Zadání pro reviewera (#6) piš jako text v modulu, stejně jako <code>ZADANI</code><br />
+  v <code>chip_run.py</code>. Musí obsahovat: přečti brief celý, ověř že testy opravdu<br />
+  testují (ne že jen procházejí), ověř DoD proti skutečnosti, hlásit — neopravovat.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno z poznatků NotebookLM (QA/reviewer role v multiagentním flow)</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>hotovo</td>
+<td><code>chip_review.py</code> + 51 testů; sada 288 testů zelená, <code>chip_lint.py</code> OK (2 varování „# nový", cesty teď existují)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>merged</td>
+<td>Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Nálezy a rozhodnutí (k posouzení uživatelem, neřešeno v tomhle chipu):</strong></p>
+<ol>
+<li><strong>Nástroj nerozhoduje.</strong> Exit 1 vrací výhradně kontrola rozsahu (#2); podezřelé<br />
+   testy, DoD ani poměr řádků návratový kód nezvedají — je na to test<br />
+   (<code>test_podezrely_test_nezvedne_navratovy_kod</code>). Kdyby se to mělo změnit,<br />
+   je to změna metodiky, ne nástroje.</li>
+<li><strong>Kandidát na sloučení do <code>chip_common.py</code></strong> (nechal jsem lokálně, <code>chip_common</code><br />
+   si nárokuje jiný chip):<br />
+   - <code>_git(repo, *args)</code> — git bez shellu; <code>chip_gate.spust</code> umí jen <code>shell=True</code><br />
+     a vrací spojený stdout+stderr, což se na <code>git show --numstat</code> nehodí.<br />
+   - <code>DOD_RADEK</code> — čtení checkboxů se značkou. <code>chip_common.ISSUE</code> /<br />
+<code>HOTOVA_ISSUE</code> vrací jen texty, takže „odškrtnuté vedle neodškrtnutých"<br />
+     z nich složit nejde.</li>
+<li><strong>Závislost na cizích modulech je jen ke čtení</strong>: <code>from chip_lint import prekryv,
+   vzor</code> a <code>from chip_gate import prikazy</code>. Chip 08 (<code>chip_gate.py</code>) prosím<br />
+   zachovej funkci <code>prikazy(chip) -&gt; list[str]</code>, jinak se rozbije sekce DoD.</li>
+<li><code>--commit</code> je default <code>HEAD</code>. Když se pustí nad commitem, který chip nedělal<br />
+   (např. orchestrátorův commit se třemi briefy), vyjdou cizí briefy jako<br />
+   „mimo nárok" — je to správně, ale volající si musí rozsah hlídat<br />
+   (<code>--commit main..HEAD</code> u víc commitů).</li>
+<li>Detekce assertů je záměrně <strong>konzervativní</strong>: volání pomocné metody, která<br />
+   assertuje uvnitř, se nepozná a test se nahlásí jako podezřelý. Falešný nález<br />
+   stojí jedno přečtení testu, přehlédnutý nález stojí bránu.</li>
+<li>Kontrola rozsahu pouští vlastní brief chipu a jeho <code>.html</code> (mandát agenta),<br />
+   cizí brief hlásí — pokryto testy <code>test_vlastni_brief_je_povoleny</code> /<br />
+<code>test_cizi_brief_je_nalez</code>.</li>
+</ol>
+<div class="doc-foot">Vygenerováno z <code>07-reviewer.md</code> &middot; CHIP 07 — `chip_review.py`: nezávislá kontrola chipu</div>
+</body>
+</html>

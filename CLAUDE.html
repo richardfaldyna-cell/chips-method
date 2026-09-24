@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAUDE.md — CHIPS</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="claudemd-chips">CLAUDE.md — CHIPS</h1>
+<p>Metodika + nástroje pro paralelní vývoj s AI agenty. Práce se krájí na uzavřené<br />
+balíčky („chipy"), každý běží v izolovaném git worktree a merguje se až po<br />
+projití automatické brány. Vznik a odůvodnění: <code>docs/konverzace-2026-07-25.md</code>.</p>
+<h2 id="co-tady-plati">Co tady platí</h2>
+<ul>
+<li><strong>Metodika je v <code>docs/metodika.md</code></strong> — když se mění pravidlo, mění se tam,<br />
+  ne v README ani v šabloně. README je jen rozcestník.</li>
+<li><strong><code>chips/TEMPLATE.md</code> je zdroj pravdy pro strukturu briefu.</strong> Když se do něj<br />
+  přidá sekce, přidej ji i do <code>POVINNE</code> v <code>tools/chip_lint.py</code> — jinak se<br />
+  nekontroluje a časem vyhnije.</li>
+<li><strong>Nástroje bez externích závislostí</strong> kromě <code>markdown</code> (jen <code>md2html.py</code>).<br />
+  Chip briefy parsuje vlastní mini-parser v <code>chip_common.py</code>, ne PyYAML.</li>
+<li><strong>Ke každému <code>.md</code> patří <code>.html</code></strong> (konvence workspace):<br />
+<code>python tools/md2html.py --all</code>. Před commitem přegeneruj.</li>
+<li><code>chip_lint.py</code> vrací <strong>exit 1 při nálezu</strong> — je to brána, ne doporučení.<br />
+  Nezaváděj do něj nic, co by se dalo „jen tak" ignorovat.</li>
+<li><strong>Testy: <code>python -m unittest discover -s tests -v</code></strong>, stdlib <code>unittest</code>, žádný<br />
+  pytest. Každý test si staví vlastní <code>tempfile</code> fixture a uklidí po sobě;<br />
+<code>chip_common.CHIPS_DIR</code> je globální stav, v <code>tearDown</code> ho vracej.<br />
+  Nová funkce bez testu se sem nedostane — sada je jediné, co drží bránu poctivou.</li>
+</ul>
+<h2 id="kdyz-tenhle-projekt-ridis-jako-orchestrator">Když tenhle projekt řídíš jako orchestrátor</h2>
+<ul>
+<li><strong>Commitni před <code>chip_run.py</code></strong> — worktree se větví z HEAD, ne z working tree.</li>
+<li><strong>Nesahej na brief běžícího chipu.</strong> Je to soubor, který zároveň edituje agent<br />
+  (Log, checkboxy) — přepis stavu dělej před spuštěním nebo až po merge<br />
+  (<code>chip_common.prepis_stav</code>).</li>
+<li><strong>Bránu ověř sám</strong> (<code>chip_gate.py NN</code>), nezávisle na tom, co agent napsal<br />
+  do souhrnu. PreToolUse hook ji spustí ještě jednou při merge — když ho<br />
+  budeš chtít obejít, zastav se a zeptej se uživatele. Po každém<br />
+  merge pusť celou sadu na hlavní větvi — zelená v izolaci není zelená dohromady.</li>
+<li>Stav chipu přepínáš ty, ne agent. Mandát chipu je Log a checkboxy.</li>
+</ul>
+<h2 id="ceho-se-drzet-obsahove">Čeho se držet obsahově</h2>
+<p>Projekt existuje kvůli třem konkrétním selháním paralelního vývoje. Když se<br />
+přidává funkce, musí sloužit aspoň jednomu z nich:</p>
+<ol>
+<li>N session nad jedním working tree → tiše ztracené změny (→ worktree)</li>
+<li>autonomní merge bez ověření → „zkontroloval jsem to" jako tvrzení modelu (→ brána)</li>
+<li>nejasné hranice mezi balíčky → kolize (→ disjunktnost + <code>chip_lint.py</code>)</li>
+</ol>
+<p>Naopak sem <strong>nepatří</strong>: hlasování více modelů jako náhrada rozhodnutí,<br />
+automatický merge bez brány, měkká formulace pravidel typu „buď opatrný".</p>
+<h2 id="git-bezpecnost">Git / bezpečnost</h2>
+<ul>
+<li><strong>Push jen na vlastní větev a přes PR</strong>, nikdy rovnou do <code>master</code>.</li>
+<li><strong>Repo je veřejné.</strong> Do briefů, logů, dokumentace ani commitů nepatří<br />
+  absolutní lokální cesty (<code>repo:</code> piš relativně k adresáři s briefy, typicky<br />
+<code>..</code>), názvy firemních repů ani secrets. Cizí projekt popiš obecně<br />
+  („firemní ERP projekt"), ne jménem.</li>
+</ul>
+<div class="doc-foot">Vygenerováno z <code>CLAUDE.md</code> &middot; CLAUDE.md — CHIPS</div>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 11 — čtyři nálezy v lintu a parseru</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 11<br />
+nazev: lint-common<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-11/lint-common<br />
+worktree: ../CHIPS-chip-11</p>
+<hr />
+<h1 id="chip-11-ctyri-nalezy-v-lintu-a-parseru">CHIP 11 — čtyři nálezy v lintu a parseru</h1>
+<p>Externí code review potvrdil tři vady v <code>chip_lint.py</code> a jednu v<br />
+<code>chip_common.py</code>. Dvě z nich přímo zasahují reálný firemní projekt (ERP-CHIPS).</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <strong><code>prekryv()</code> mine kolizi adresář × glob bez textového prefixu</strong><br />
+      (ř. ~233): <code>prekryv('src', '*.py')</code> vrací False, přestože<br />
+<code>fnmatch('src/foo.py', '*.py')</code> je True. Literál bez zástupných znaků,<br />
+      který je <em>adresářem nároku</em>, musí kolidovat s globem, jenž může<br />
+      matchovat cestu uvnitř něj. Oprav v <code>_prunik</code>/<code>prekryv</code>: literální<br />
+      cesta bez vzoru se má porovnávat i jako prefix možných shod globů<br />
+      (glob <code>*.py</code> ↔ adresář <code>src</code> = kolize, protože <code>src/x.py</code> vyhoví oběma).<br />
+      Bias: raději kolize navíc než přehlédnutá.</li>
+<li>[x] #2 — <strong>Existence se ověřuje proti repu, kde leží briefy, ne proti<br />
+<code>repo:</code></strong> (<code>strom_ke_kontrole</code>, ř. ~93). Layout ERP-CHIPS: briefy<br />
+      v repu ERP-CHIPS, cíl <code>erp</code> — lint hledá nároky ve špatném<br />
+      repozitáři. Oprav: <code>strom_ke_kontrole</code> má přednostně vracet strom<br />
+      briefu JEN tehdy, když je to <strong>týž repozitář</strong> jako <code>repo:</code> (worktree<br />
+      pozná přes <code>git rev-parse --git-common-dir</code>, nebo jednodušeji: strom<br />
+      briefu použij jen když <code>repo:</code> je předkem/potomkem cesty briefu);<br />
+      jinak platí <code>repo:</code> z frontmatteru.</li>
+<li>[x] #3 — <strong>Absolutní glob shodí lint tracebackem</strong> (<code>naroky()</code>, ř. ~252):<br />
+<code>repo.glob('C:/data/*.xlsx')</code> vyhodí NotImplementedError dřív, než<br />
+      lint cokoli vypíše. Oprav: cesty, které jsou absolutní nebo obsahují<br />
+<code>..</code>, do <code>repo.glob()</code> vůbec neposílat (validace v <code>zkontroluj_cesty</code><br />
+      je hlásí, ale <code>naroky()</code> běží i mimo ni).</li>
+<li>[x] #4 — <strong>Cesta s ' #' ve jméně se tiše usekne</strong> (<code>chip_common.
+      soubory_detail</code>, ř. ~105): <code>docs/plan #1.md</code> se zkrátí na <code>docs/plan</code>.<br />
+      Rozhodnutí: poznámka se odděluje <strong>dvěma a více mezerami + #</strong> (dnes<br />
+      stačí jedna mezera). Uprav regex <code>KOMENTAR</code> na <code>\s{2,}#\s*(.*)$</code>,<br />
+      zdokumentuj v šabloně... POZOR: šablonu nevlastníš — jen zapiš do Logu,<br />
+      že komentář v TEMPLATE.md („<code>src/nove.py    # nový</code>" už používá 4 mezery,<br />
+      takže je kompatibilní) a případnou úpravu textu nech orchestrátorovi.</li>
+<li>[x] #5 — testy na všechny čtyři opravy; každý musí na PŮVODNÍ verzi selhat<br />
+      (doloženo v Logu s hláškami)</li>
+<li>[x] #6 — celá stávající sada projde; testy, které fixovaly staré chování,<br />
+      uprav s komentářem proč</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_lint.py
+tools/chip_common.py
+tests/test_chip_lint.py
+tests/test_chip_common.py
+</code></pre>
+<p>Nesahej na <code>hook_chip_gate.py</code>, <code>chip_gate.py</code> (chip 10), <code>chip_slice.py</code>,<br />
+<code>chip_run.py</code> (chip 12), ani na <code>chip_status.py</code>, <code>chip_review.py</code>,<br />
+<code>chip_new.py</code> a jejich testy — importují <code>chip_common</code>, takže <strong>z veřejného<br />
+API nic neodstraňuj ani nepřejmenovávej</strong>, jen oprav chování.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] <code>prekryv('src', '*.py')</code> je True — pokryto testem</li>
+<li>[x] lint nad briefy ERP-CHIPS (<code>--dir &lt;workspace&gt;/ERP-CHIPS/chips</code>)<br />
+      dál vrací 0 chyb — spusť to doopravdy, výstup do Logu</li>
+<li>[x] absolutní glob v nároku = hláška, ne traceback — test</li>
+<li>[x] <code>docs/plan #1.md</code> se už neusekne; <code># nový</code> (2+ mezery) dál funguje — testy</li>
+<li>[x] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>odstranění/přejmenování čehokoli z veřejného API <code>chip_common</code> (má 6 konzumentů)</li>
+<li>změna <code>TEMPLATE.md</code> (text komentáře o <code># nový</code> — jen zapiš do Logu)</li>
+<li>oslabení lintu: nic, co je dnes chyba, se nesmí stát varováním</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li><code>prekryv</code>/<code>_prunik</code>/<code>_tokeny</code> jsou z chipu 05 — memoizovaná rekurze nad<br />
+  tokeny HVEZDA/JEDEN/literál. <code>*</code> záměrně matchuje i přes <code>/</code> (fnmatch styl).<br />
+  U #1 dej pozor, ať neuděláš kolizi ze VŠEHO: <code>src</code> × <code>tests/*.py</code> musí<br />
+  zůstat False. Adresářová sémantika platí jen směrem „glob může vyhovět<br />
+  cestě UVNITŘ literálu".</li>
+<li>U #2 pozor na testy chipu 05 (<code>TestStromKeKontrole</code>) — chování „brief ve<br />
+  worktree téhož repa → kontroluj worktree" musí zůstat; mění se jen případ<br />
+  „brief v CIZÍM repu".</li>
+<li>Regresní důkaz: <code>git show HEAD:tools/&lt;soubor&gt;</code> + <code>sys.modules</code> před importem<br />
+  testů; vzor v Logu chipů 05–07 v <code>_pilot-repo/chips/</code>.</li>
+<li>Konvence: hlášky česky, <code>X</code> chyba / <code>!</code> varování.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>založeno z code review (nálezy 5–7 + 9)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#1</strong> <code>prekryv()</code>: literál bez zástupných znaků se proti vzoru porovnává i jako prefix jeho možných shod (<code>_prunik(_tokeny(lit + "/*"), vzor)</code>, v obou pořadích) — <code>src</code> × <code>*.py</code> je kolize, protože <code>src/x.py</code> vyhoví oběma. Adresářová sémantika platí JEN směrem „vzor umí matchnout cestu uvnitř literálu": <code>src</code> × <code>tests/*.py</code>, <code>docs</code> × <code>src/*.md</code> i <code>src/a.py</code> × <code>src/b*</code> zůstávají False (test <code>test_prekryv_adresar_a_glob_jinam_zustava_disjunktni</code>).</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#2</strong> <code>strom_ke_kontrole()</code>: strom briefu přebíjí <code>repo:</code> jen u TÉHOŽ repozitáře. Nová privátní <code>_git_spolecny_adresar()</code> čte <code>.git</code> (adresář = hlavní strom, soubor <code>gitdir: …/.git/worktrees/&lt;jméno&gt;</code> = worktree) a odřízne <code>worktrees/&lt;jméno&gt;</code> — ekvivalent <code>git rev-parse --git-common-dir</code> bez subprocesu. Navíc se vyžaduje, aby <code>repo:</code> byl kořenem svého stromu. Chování chipu 05 (worktree × hlavní strom) beze změny, hlídá <code>TestStromKeKontrole</code>.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#3</strong> <code>naroky()</code>: cesta, která je absolutní nebo obsahuje <code>..</code>, se do <code>repo.glob()</code> neposílá vůbec (kontrola přes <code>absolutni()</code> + <code>PurePosixPath(...).parts</code>). Nárok se dál vrací jako sám sebe, takže se pořád účastní kolizní matice; tvar hlásí <code>zkontroluj_cesty</code> jako chybu — brána nikde nezměkčena.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#4</strong> <code>chip_common.KOMENTAR</code> = <code>\s{2,}#\s*(.*)$</code> (dřív <code>\s+#</code>). <strong>TEMPLATE.md nesahám (T3):</strong> řádek <code>src/nove.py    # nový</code> v šabloně používá 4 mezery, takže je s novým pravidlem kompatibilní a šablona nepotřebuje žádnou úpravu chování. Doporučení pro orchestrátora: do textu šablony (a do <code>docs/metodika.md</code>) dopsat větu „poznámku odděl od cesty aspoň dvěma mezerami" — jedna mezera je nově součást jména souboru.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#5 — regresní důkaz.</strong> Původní <code>tools/chip_lint.py</code> a <code>tools/chip_common.py</code> z <code>a827840</code> (<code>git show</code>) PŘEDregistrovány do <code>sys.modules</code> před importem testů (<code>sys.path.insert</code> nestačí — testy si <code>tools/</code> vkládají na <code>sys.path[0]</code> samy; skript navíc <code>assert</code>uje <code>chip_lint.__file__</code> na původní kopii). Výsledky: <strong>#1</strong> <code>FAIL test_prekryv_adresar_a_glob_bez_textoveho_prefixu</code> → <code>AssertionError: False is not true</code> (<code>prekryv('src','*.py')</code>) a <code>FAIL test_kolize_adresar_versus_glob_bez_textoveho_prefixu</code> → <code>AssertionError: 0 != 1 : zkontrolováno 2 chipů (2 aktivních) / OK — 0 chyb</code> (brána kolizi mlčky pustila). <strong>#2</strong> celá <code>TestStromKeKontroleCiziRepo</code> = <strong>4 selhání ze 4</strong>, klíčové <code>AssertionError: …/briefy != …/briefy/projekt</code> a <code>('src/z_cile.py','src/*.py') not found in [('src/*.py','src/*.py'), ('src/z_briefu.py','src/*.py')]</code> — nároky se ověřovaly proti repu s briefy. <strong>#3</strong> 3 testy = <strong>3 ERROR</strong>, všechny <code>NotImplementedError: Non-relative patterns are unsupported</code> z <code>pathlib/__init__.py:312</code> přes <code>naroky()</code> ř. 253, u <code>test_absolutni_vzor_je_hlaska_ne_traceback</code> až z <code>main()</code> ř. 337 — traceback dřív, než lint cokoli vypsal. <strong>#4</strong> 2 selhání, <code>AssertionError: [('docs/plan', False)] != [('docs/plan #1.md', False)]</code> — cesta se tiše usekla. Testy <code>test_prekryv_adresar_a_glob_jinam_zustava_disjunktni</code> a <code>test_dva_bile_znaky_pred_mrizkou_jsou_poznamka</code> na původní verzi schválně PROŠLY: to jsou pojistky proti přestřelení opravy, ne důkazy nálezu.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>#6</strong> Celá sada: <code>python -m unittest discover -s tests -v</code> → <code>Ran 373 tests … OK</code>, 0 selhání, 0 expected failures (z 360 před chipem, +13 metod). Upraven jediný existující test: v <code>test_prekryv_vzor_a_konkretni_cesta</code> nahrazeno <code>assertFalse(prekryv('src/*.py','src/data.json'))</code> za <code>assertFalse(prekryv('src/*.py','tests/data.json'))</code> — s adresářovou sémantikou z #1 (a <code>*</code> matchujícím i přes <code>/</code>) je <code>src/data.json</code> × <code>src/*.py</code> záměrná kolize navíc; důvod je zapsaný komentářem přímo v testu. Nic z veřejného API <code>chip_common</code> neodstraněno ani nepřejmenováno. Jen stdlib.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>running</td>
+<td><strong>DoD — lint nad ERP-CHIPS</strong> spuštěn doopravdy (jen čtení): <code>python tools/chip_lint.py --dir &lt;workspace&gt;/ERP-CHIPS/chips</code> → <code>zkontrolováno 11 chipů (0 aktivních)</code> / <code>OK — 0 chyb, 0 varování</code>, exit 0. Poctivá poznámka: všech 11 briefů je <code>draft</code>, takže kontrola existence cest se na ně zatím vůbec nepouští — samotné „0 chyb" tedy #2 nedokazuje. Přímé měření na reálném layoutu ano: <code>strom_ke_kontrole()</code> nad <code>00-kostra-repa.md</code> vrací po opravě <code>…/ERP-CHIPS/erp</code> (cílový repo z <code>repo:</code>), zatímco původní verze vracela <code>…/ERP-CHIPS</code> (repo s briefy). Jakmile první chip přejde na <code>ready</code>, opravená verze hledá nároky ve správném repozitáři.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>gated</td>
+<td><strong>Brána zelená.</strong> <code>python -m unittest discover -s tests -v</code> → <code>Ran 373 tests … OK</code>. <code>python tools/chip_lint.py</code> → <code>OK — 0 chyb, 3 varování</code>, exit 0; všechna tři varování jsou zděděné placeholdery v cizích briefech (<code>08</code>, <code>09</code>, <code>12</code>), na které nemám nárok. NEMERGOVÁNO — merge dělá orchestrátor.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>11-lint-common.md</code> &middot; CHIP 11 — čtyři nálezy v lintu a parseru</div>
+</body>
+</html>

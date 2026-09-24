@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konverzace 2026-07-25 — vznik projektu CHIPS</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="konverzace-2026-07-25-vznik-projektu-chips">Konverzace 2026-07-25 — vznik projektu CHIPS</h1>
+<p>Záznam diskuse, ze které projekt vznikl. Uloženo na žádost uživatele.<br />
+Účastníci: <strong>Richard</strong> / <strong>Claude</strong> (Claude Code, Opus 5).</p>
+<hr />
+<h2 id="1-otazka-co-jsou-chipy-a-jak-orchestruji-ai">1. Otázka: „Co jsou chipy a jak orchestrují AI?"</h2>
+<p>První kolo bylo nedorozumění — slovo „chipy" mohlo znamenat hardware (GPU/TPU)<br />
+nebo něco v Claude Code. Po upřesnění šlo o <strong>Skills a subagenty v Claude Code</strong>.</p>
+<h3 id="co-je-skill">Co je Skill</h3>
+<p>Skill = složka se souborem <code>SKILL.md</code>. Žádný kód, žádný proces, žádné API.</p>
+<pre><code>~/.claude/skills/sync-tasks/
+└── SKILL.md      ← frontmatter (name + description) + instrukce v markdownu
+</code></pre>
+<p>Na startu session se do kontextu načte <strong>jen <code>description</code></strong>. Tělo souboru se<br />
+načte teprve ve chvíli, kdy se skill zavolá — to je <strong>progressive disclosure</strong>.<br />
+Bez toho by desítky nainstalovaných skillů sežraly kontext dřív, než uživatel<br />
+napíše první slovo. Proto je <code>description</code> nejdůležitější řádek celého skillu:<br />
+je to jediné, podle čeho se model rozhoduje, jestli skill načíst.</p>
+<p>Aktivace: buď explicitně (<code>/sync-tasks</code>), nebo automaticky podle shody záměru<br />
+s popisem.</p>
+<h3 id="skill-neorchestruje-ai-orchestruje-model">Skill neorchestruje AI, orchestruje model</h3>
+<p>Skill není agent — neběží, nemá vlastní model, nic nespouští. Je to <strong>předpis,<br />
+kterým se model řídí místo své výchozí úvahy</strong>. Skutečnou práci často dělá<br />
+deterministický skript; skill jen říká, jak ho použít. (Příklad z workspace:<br />
+<code>sync-tasks</code> = skript <code>sync_tasks.py</code> + procedura „nejdřív <code>--dry-run</code>,<br />
+shrň, počkej na souhlas, pak zapiš".)</p>
+<h3 id="pet-vrstev-orchestrace">Pět vrstev orchestrace</h3>
+<table>
+<thead>
+<tr>
+<th>Vrstva</th>
+<th>Co to je</th>
+<th>Kontext</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Skill</strong></td>
+<td>markdown instrukce načtená do modelu</td>
+<td>sdílený</td>
+</tr>
+<tr>
+<td><strong>Subagent</strong></td>
+<td>druhá instance s vlastním kontextem</td>
+<td>izolovaný</td>
+</tr>
+<tr>
+<td><strong>MCP server</strong></td>
+<td>externí proces poskytující nástroje</td>
+<td>mimo model</td>
+</tr>
+<tr>
+<td><strong>Hook</strong></td>
+<td>skript spuštěný harnessem při události</td>
+<td>žádný</td>
+</tr>
+<tr>
+<td><strong>Workflow</strong></td>
+<td>JS skript orchestrující N subagentů</td>
+<td>řídí ostatní</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Skill vs. subagent</strong> — jediné rozhodnutí, které je potřeba umět:</p>
+<ul>
+<li><strong>Skill</strong>, když má jinak pracovat hlavní model. Výsledek zůstává v hovoru,<br />
+  vidíš každý krok, můžeš zasáhnout.</li>
+<li><strong>Subagent</strong>, když chceš práci <em>odstínit</em>. Vlastní čistý kontext, vrátí jen<br />
+  závěr. Cena: nevidí hovor, ty nevidíš jeho práci.</li>
+</ul>
+<p>Subagenti běží <strong>paralelně</strong> — to je ta „orchestrace": ne AI řídící AI, ale<br />
+rozdělení nezávislé práce místo sériového zpracování.</p>
+<hr />
+<h2 id="2-otazka-nekdo-pouziva-nejake-chips-k-rizeni-celeho-vyvoje-s-ai">2. Otázka: „Někdo používá nějaké chips k řízení celého vývoje s AI"</h2>
+<p>Doložené screenshotem promptu (parafráze):</p>
+<blockquote>
+<p>Chci v několika oknech rozjet maximum úkolů, které se stanou orchestrátory a<br />
+budou volat agenty Opus 5 effort Max… mergovat bude samotný orchestrátor (jen<br />
+pro zásadní T3 bude vyžadovat mé schválení) po důsledné kontrole. Předpoklad<br />
+je 10 orchestrátorů, kteří přes agenty vyřeší 10–20 issues… <strong>Připrav tedy<br />
+minimálně 10 chipů, které dohromady vyřeší nejméně 100 issues.</strong> Pokud si<br />
+nebudou vědět rady, mohou konzultovat s Codex, Gemini, případně Grok…<br />
+Já nechci do toho vůbec vstupovat, musí být vše absolutně autonomní… vždy ať<br />
+se raději víc kontroluje, kvalita je víc než kvantita nebo rychlost.</p>
+</blockquote>
+<h3 id="zaver-chip-neni-termin">Závěr: „chip" není termín</h3>
+<p>Neexistuje technologie, feature ani standard toho jména. V dokumentaci Claude<br />
+Code ani Anthropic to nenajdeš. Autor promptu si slovo zavedl sám. Znamená:</p>
+<blockquote>
+<p><strong>chip = balíček práce</strong> — uzavřený objem úkolů (10–20 issues), který dostane<br />
+jeden orchestrátor a odpracuje ho nezávisle na ostatních.</p>
+</blockquote>
+<p>Metafora pokerového žetonu. Standardní názvy pro totéž: <em>work packet</em>, <em>batch</em>,<br />
+<em>task bundle</em>.</p>
+<blockquote>
+<p><strong>Filtr na AI-dev žargon:</strong> když slyšíš termín, zkus ho najít v oficiální<br />
+dokumentaci. Když tam není, je to něčí metodika — může být dobrá, ale posuzuj<br />
+ji podle toho, co dělá, ne podle toho, jak se jmenuje.</p>
+</blockquote>
+<h3 id="architektura-kterou-prompt-popisuje">Architektura, kterou prompt popisuje</h3>
+<pre><code>        ty  ─── napíšeš 10 &quot;chipů&quot; (= 10 zadání)
+         │
+    ┌────┼────┬────────┬─────────┐
+    ▼    ▼    ▼        ▼         ▼
+  okno1 okno2 okno3  ...       okno10      ← samostatné session
+    │                                         &quot;orchestrátoři&quot;
+    ▼
+  ┌─ subagent ── issue #12
+  ├─ subagent ── issue #13
+  └─ subagent ── issue #14
+    │
+    ▼
+  orchestrátor zkontroluje + zmerguje sám
+  (T3 = kritické → čeká na schválení)
+</code></pre>
+<p>Mapování slangu na skutečnost:</p>
+<table>
+<thead>
+<tr>
+<th>Slang</th>
+<th>Skutečnost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>„chip"</td>
+<td>textové zadání / soubor s briefem pro jedno okno</td>
+</tr>
+<tr>
+<td>„okno"</td>
+<td>samostatná Claude Code session</td>
+</tr>
+<tr>
+<td>„orchestrátor"</td>
+<td>hlavní smyčka v tom okně</td>
+</tr>
+<tr>
+<td>„agenti"</td>
+<td>subagenti přes Agent tool</td>
+</tr>
+<tr>
+<td>„effort Max"</td>
+<td>reálný přepínač reasoning effortu</td>
+</tr>
+<tr>
+<td>„konzultovat s Codex/Gemini/Grok"</td>
+<td>CLI těch nástrojů přes Bash</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tri-diry-v-puvodnim-planu">Tři díry v původním plánu</h3>
+<ol>
+<li><strong>Deset oken píše do jednoho repa.</strong> Prompt to vůbec neřeší. Nejde o git<br />
+   konflikty, ale o tiše ztracené změny. Řešení: git worktrees.</li>
+<li><strong>Konzultace s cizími modely nepřidává správnost.</strong> Nemají přístup k repu ani<br />
+   historii; shoda tří modelů = průměr tří dohadů. Skutečný druhý názor v kódu<br />
+   jsou testy a build.</li>
+<li><strong>„Absolutně autonomní" + „kvalita nad kvantitou" si odporují</strong>, pokud<br />
+   neexistuje automatická brána. Bez ní „důsledná kontrola" znamená jen, že si<br />
+   model sám o sobě řekl, že to zkontroloval.</li>
+</ol>
+<blockquote>
+<p><strong>Klíčové pravidlo:</strong> autonomie se nedává promptem, ale ověřováním. Věta<br />
+„buď důsledný" je přání. Sílu má hook, který zablokuje commit, nebo CI, které<br />
+nepustí merge.</p>
+</blockquote>
+<h3 id="sest-doporuceni-ze-kterych-vznikla-metodika">Šest doporučení, ze kterých vznikla metodika</h3>
+<ol>
+<li>Řezat issues podle <strong>nezávislosti souborů</strong>, ne podle stáří.</li>
+<li>Každý balíček = <strong>vlastní git worktree</strong>.</li>
+<li>Brief balíčku uložit <strong>jako soubor</strong> (<code>chips/01-*.md</code>).</li>
+<li><strong>Brána místo dohledu</strong> — žádný merge bez zeleného <code>/ship</code>.</li>
+<li><strong>Začít se třemi, ne deseti</strong> — zjistit spotřebu a slabá místa.</li>
+<li><strong>Jeden chip napřed celý ručně</strong>, ať je vzor, jak vypadá dobrý výstup.</li>
+</ol>
+<hr />
+<h2 id="3-rozhodnuti">3. Rozhodnutí</h2>
+<p>Richard: <em>„vytvoř mi z toho projekt CHIPS, líbí se mi to a mohli bychom to<br />
+zkusit"</em> → založen tento projekt (v kořeni workspace, jako<br />
+nástroj napříč workspace).</p>
+<p>Body 1–6 výše se staly obsahem <a href="metodika.md">metodika.md</a>; slovo „chip" dostalo<br />
+backronym <strong>C</strong>ontained <strong>H</strong>ands-off <strong>I</strong>ssue <strong>P</strong>acket.</p>
+<div class="doc-foot">Vygenerováno z <code>konverzace-2026-07-25.md</code> &middot; Konverzace 2026-07-25 — vznik projektu CHIPS</div>
+</body>
+</html>

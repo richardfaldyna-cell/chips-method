@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 23 — orchestrátor nevidí, co se v běžících chipech děje</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 23<br />
+nazev: dashboard<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne<br />
+vetev: ai/chip-23/dashboard<br />
+worktree: ../CHIPS-chip-23</p>
+<hr />
+<h1 id="chip-23-orchestrator-nevidi-co-se-v-bezicich-chipech-deje">CHIP 23 — orchestrátor nevidí, co se v běžících chipech děje</h1>
+<p>Když běží tři chipy naráz, jediný způsob, jak zjistit stav, je ptát se agentů —<br />
+tedy věřit tvrzení modelu o sobě samém. Přesně to je selhání, kvůli kterému<br />
+projekt vznikl. <code>chip_status.py</code> ukazuje stav z briefů v <strong>hlavním stromě</strong>,<br />
+kde se za běhu chipu nehýbe nic: checkboxy i soubory se mění ve worktree.</p>
+<p><code>chip_dashboard.py</code> má dát obrázek z <strong>tvrdých zdrojů</strong> — z worktree každého<br />
+chipu a z gitu. Ne z toho, co kdo napsal do souhrnu.</p>
+<p>Rozsah schválen 2026-07-27: stavová deska + časová osa.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — nový nástroj <code>tools/chip_dashboard.py</code>, generuje <code>dashboard.html</code><br />
+      (čisté HTML + <strong>inline CSS</strong>, žádný externí zdroj — stejná zásada jako<br />
+<code>md2html.py</code>, soubor musí fungovat offline)</li>
+<li>[x] #2 — <strong>data se čtou z worktree chipu</strong>, ne z hlavního stromu; jen tam se<br />
+      hýbou checkboxy a soubory. Tohle je hlavní důvod, proč nástroj vzniká.</li>
+<li>[x] #3 — karta chipu: stav, název, progress z checkboxů Issues (<code>hotove_issues</code><br />
+      / <code>issues</code>), poslední commit na jeho větvi, ocas sekce Log</li>
+<li>[x] #4 — karta ukazuje <strong>právě rozeditované soubory</strong> (<code>git status --porcelain</code><br />
+      ve worktree) — z toho je vidět, kde agent zrovna je</li>
+<li>[x] #5 — karty seskupené po vlnách; pořadí podle ID</li>
+<li>[x] #6 — chip bez worktree (<code>draft</code>, <code>merged</code>) kartu má taky, jen bez<br />
+      živých dat — a <strong>je z ní poznat, že živá data nejsou</strong>, ne prázdno<br />
+      vydávané za nulu</li>
+<li>[x] #7 — časová osa commitů všech chip větví (tempo a prodlevy)</li>
+<li>[x] #8 — <code>--watch</code> režim: <code>&lt;meta refresh&gt;</code> v HTML + volitelné opakované<br />
+      generování; interval jako parametr</li>
+<li>[x] #9 — <code>--dir</code> jako všude jinde (<code>pridej_arg_dir</code>), aby šel pustit nad<br />
+      cizím repem</li>
+<li>[x] #10 — nástroj je <strong>jen pro čtení</strong>: nesmí zapsat nikam jinam než do<br />
+      výstupního HTML. Žádný <code>git</code> příkaz, který mění stav.</li>
+<li>[x] #11 — chybějící/rozbitý worktree nesmí shodit celý dashboard — karta<br />
+      to ukáže a zbytek se vykreslí</li>
+<li>[x] #12 — testy: generování nad dočasnými repy a worktree, bez zápisu do<br />
+      skutečného repa; parsování <code>git status</code>/<code>git log</code> výstupu odděleně od<br />
+      vykreslování (čisté funkce)</li>
+<li>[x] #13 — <code>dashboard.html</code> patří do <code>.gitignore</code>? Rozhodni a <strong>zapiš důvod<br />
+      do Logu</strong>; soubor sám do commitu nedávej</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_dashboard.py        # nový
+tests/test_chip_dashboard.py   # nový
+</code></pre>
+<p><code>chip_common.py</code> je <strong>mimo nárok</strong> — importuj z něj, ale needituj. Když by bylo<br />
+potřeba ho rozšířit, je to T3. <code>.gitignore</code> taky needituj (bod #13 je jen<br />
+rozhodnutí a zápis do Logu). README a metodiku dopisuje orchestrátor.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> projde a testů je <strong>víc</strong> než<br />
+      dnešních 523</li>
+<li>[x] <code>python tools/chip_dashboard.py</code> nad tímhle repem vygeneruje<br />
+<code>dashboard.html</code>, který jde otevřít v prohlížeči a ukazuje všech 22 chipů</li>
+<li>[x] <code>dashboard.html</code> neobsahuje <strong>žádný</strong> odkaz na externí zdroj<br />
+      (<code>http://</code>, <code>https://</code>, <code>src=</code>, <code>&lt;link</code>) — ověřeno testem</li>
+<li>[x] test, který postaví dva dočasné worktree s různým počtem odškrtnutých<br />
+      checkboxů a ověří, že progress na kartách odpovídá <strong>worktree</strong>, ne<br />
+      hlavnímu stromu — to je jádro chipu</li>
+<li>[x] test, že nástroj nezapíše nikam kromě výstupního souboru</li>
+<li>[x] <code>git status --porcelain</code> po běhu testů je prázdný kromě vědomých změn</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Zastav se, zapiš do Logu a nech na uživateli:</p>
+<ul>
+<li><strong>jakákoli změna <code>chip_common.py</code></strong> — sdílený základ, mimo nárok</li>
+<li>nová externí závislost (žádný Jinja, žádný Flask; HTML si sestav v Pythonu<br />
+  jako <code>md2html.py</code>)</li>
+<li>cokoli, co by nástroj udělalo zapisujícím (git příkaz měnící stav, mazání)</li>
+<li>rozsah nad rámec Issues — dashboard není chip_status, nemá řešit lint,<br />
+  bránu ani spouštění</li>
+<li>jakýkoli zásah mimo „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testy: <code>python -m unittest discover -s tests -v</code>, stdlib <code>unittest</code>, <strong>žádný<br />
+  pytest</strong>. Vlastní <code>tempfile</code> fixture, úklid po sobě.</li>
+<li><code>chip_common.CHIPS_DIR</code> je globální stav; v <code>tearDown</code> ho vracej.</li>
+<li><strong>Přečti si <code>tools/chip_status.py</code></strong> — dělá textovou verzi téhož a má<br />
+  vyřešené vlny, stavy i souhrn. Neduplikuj logiku, kterou lze číst<br />
+  z <code>chip_common</code> (<code>issues</code>, <code>hotove_issues</code>, <code>zavislosti</code>, <code>soubory</code>).</li>
+<li><strong>Přečti si <code>tools/md2html.py</code></strong> — jak se v tomhle projektu staví<br />
+  samostatné HTML s inline CSS. Drž stejný styl, ať to nevypadá jako cizí<br />
+  nástroj. Barvy stavů ať jsou čitelné v light i dark (<code>color-scheme</code>).</li>
+<li>Cestu k worktree ber z frontmatteru <code>worktree:</code> a řeš ji stejně jako<br />
+<code>chip_run.cesty()</code>: relativní = jméno adresáře vedle repa. Ty soubory jen<br />
+  čti, needituj.</li>
+<li>Rozdělení na čisté funkce (parsování, sestavení HTML) a jednu funkci se<br />
+  vstupy/výstupy je v tomhle projektu konvence — kvůli testovatelnosti.</li>
+<li>Nástroj poběží i ve chvíli, kdy agenti právě zapisují. Počítej s tím, že<br />
+  soubor může být rozeditovaný, a nepadej na tom.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-28</td>
+<td>ready</td>
+<td>brief založen orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>#1–#12 hotové: <code>tools/chip_dashboard.py</code> + <code>tests/test_chip_dashboard.py</code>. Rozděleno na čisté funkce (<code>parsuj_status</code>, <code>parsuj_commity</code>, <code>ocas_logu</code>, <code>zkrat</code>, <code>stari</code>, <code>souhrn</code>, <code>sestav_html</code>) a jedno místo s I/O (<code>karta_chipu</code>/<code>posbirej</code>/<code>main</code>). Bez závislostí; HTML se skládá v Pythonu jako v <code>md2html.py</code>, paleta i <code>color-scheme: light dark</code> převzaté odtamtud. Vlny a skloňování se berou z <code>chip_status</code> (<code>spocitej_vlny</code>, <code>_chipu</code>), issues/závislosti z <code>chip_common</code> — neduplikováno.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>Nález v cizím kódu (neopravováno, jen hlásím):</strong> <code>chip_run.brief_ke_stavu()</code> hledá kopii briefu přes <code>relative_to(repo:)</code>. To platí jen při čtení z hlavního stromu — dashboard se ale běžně pouští z worktree některého chipu, kde <code>relative_to</code> selže a všechny karty by tiše spadly zpátky na briefy toho jednoho worktree, tedy přesně na data, která se nehýbou. Proto má dashboard vlastní <code>brief_ve_worktree()</code>, které mapuje přes kořen stromu (první rodič s <code>.git</code>). <code>chip_run.py</code> needitován (mimo nárok).</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Živý důkaz issue #2 nad pěti běžícími worktree: <code>chip_status.py --dir &lt;hlavní strom&gt;</code> hlásí <code>ready 5, merged 17, issues 140/192</code>; <code>chip_dashboard.py</code> nad týmiž briefy, ale s živými daty, hlásí <code>running 5, merged 17, issues 177/192</code>. Rozdíl je 37 odškrtnutých issues a 5 přepnutých stavů, které z hlavního stromu vidět nejsou. Z worktree se proto bere i <code>stav:</code> — <code>chip_run.py --stav</code> ho zapisuje do kopie ve worktree, ne do originálu.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>#10 jen pro čtení: git jde výhradně přes <code>_git()</code> s whitelistem <code>POVOLENE_GIT</code> (<code>log</code>, <code>status</code>, <code>for-each-ref</code>), cokoli jiného je <code>ChybaJenCteni</code>. Adresář výstupu se nezakládá (<code>mkdir</code> je taky zápis) — chybějící rodič je exit 1. Ověřeno třemi testy: whitelist, záznam všech <code>subprocess.run</code> během sběru a snímek stromu před/po. <code>.git</code> je ze snímku vynechán schválně — tam si <code>git status</code> osvěžuje vlastní <code>index</code>, s nástrojem to nesouvisí.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>#6/#11: karta bez živých dat vždycky říká PROČ (<code>worktree … na disku není</code>, <code>chybí .git</code>, <code>git … selhal</code>, <code>brief nemá repo:</code>), a u chipu ve stavu <code>running</code>/<code>gated</code> je to navíc varování nahoře na desce. Rozbitý worktree shodí jen svoji kartu, zbytek se vykreslí. Odlišuje se i „poslední commit je jen společný základ, chip zatím nic neodevzdal“ — čerstvá větev zdědí historii, jinak by to vypadalo, že agent už commitoval.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>#13 rozhodnutí: <code>dashboard.html</code> PATŘÍ do <code>.gitignore</code>.</strong> Konvence workspace verzuje HTML generované z <code>.md</code> — tenhle soubor žádný <code>.md</code> zdroj nemá. Je to snímek okamžiku (relativní časy, <code>git status</code>, rozeditované soubory), mění se při každém běhu, v pěti worktree by kolidoval, a zmergovaný by tvrdil stav, který už neplatí. <code>.gitignore</code> je mimo nárok, takže řádek <code>dashboard.html</code> doplní orchestrátor; v commitu chipu soubor není a testy ho negenerují (píšou do <code>tempfile</code>).</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Brána: <code>python -m unittest discover -s tests -v</code> → <strong>609 testů, OK</strong> (před chipem 523, +86; 2 expected failures patří chipu 20, nedotčeny). <code>python tools/chip_lint.py</code> → rc 0, 0 chyb, 0 varování. <code>git status --porcelain</code> čistý kromě nárokovaných souborů. Ručně nad tímhle repem: <code>python tools/chip_dashboard.py</code> → <code>dashboard.html</code>, 22 karet, 0 odkazů ven (<code>http://</code>, <code>https://</code>, <code>src=</code>, <code>&lt;link</code>, <code>&lt;script</code>); párovost značek hlídá test přes <code>html.parser</code>. V grafickém prohlížeči soubor otevřen nebyl — vizuální kontrola zůstává na uživateli. Žádný T3, <code>chip_common.py</code> nedotčen.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><code>chips/23-dashboard.html</code> <strong>nepřegenerováno</strong> — <code>md2html.py --all</code> sahá na všechny <code>.md</code> v repu, tedy i na briefy ostatních běžících chipů, a <code>.html</code> k briefu není v „Dotčených souborech“. Patří orchestrátorovi po merge (stejně jako u chipu 14).</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>23-dashboard.md</code> &middot; CHIP 23 — orchestrátor nevidí, co se v běžících chipech děje</div>
+</body>
+</html>

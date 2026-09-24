@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 25<br />
+nazev: uklid-metadata<br />
+stav: merged</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<h1 id="jina-hodnota-nez-tahle-sestice-je-pro-chip_lintpy-chyba-slovnik-je-tady">Jiná hodnota než tahle šestice je pro <code>chip_lint.py</code> chyba (slovník je tady,</h1>
+<h1 id="protoze-agent-drzi-v-ruce-brief-ne-metodiku">protože agent drží v ruce brief, ne metodiku):</h1>
+<h1 id="draft-brief-se-pise-hranice-jeste-nejsou-jiste">draft   — brief se píše, hranice ještě nejsou jisté</h1>
+<h1 id="ready-vyplneny-brief-chip_lintpy-cisty-smi-se-pustit">ready   — vyplněný brief, <code>chip_lint.py</code> čistý → smí se pustit</h1>
+<h1 id="running-bezi-ve-worktree">running — běží ve worktree</h1>
+<h1 id="gated-prace-hotova-ceka-na-branu">gated   — práce hotová, čeká na bránu</h1>
+<h1 id="merged-brana-zelena-slouceno-worktree-uklizen">merged  — brána zelená, sloučeno, worktree uklizen</h1>
+<h1 id="blocked-narazil-na-t3-nebo-brana-selhala-ceka-na-rozhodnuti-cloveka">blocked — narazil na T3 nebo brána selhala → čeká na rozhodnutí člověka</h1>
+<p>zavisi_na:           # ID chipů, které musí být 'merged' dřív, např. 00, 01<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne; lint pak neexistenci repa a cest jen varuje<br />
+vetev: ai/chip-25/uklid-metadata   # prefix ai/ = kód psal AI agent (audit v git logu); prázdné = odvodí chip_run.py<br />
+worktree: ../CHIPS-chip-25</p>
+<hr />
+<h1 id="chip-25-uklid-ruci-i-za-metadata-ne-jen-za-pracovni-adresar">CHIP 25 — <code>--uklid</code> ručí i za metadata, ne jen za pracovní adresář</h1>
+<p><code>chip_run.uklid()</code> po smazání pracovního stromu spouští <code>git worktree prune</code>,<br />
+ale jeho výsledek nečte a úspěch měří jen přes <code>worktree.exists()</code> — když<br />
+prune nechá v <code>.git/worktrees/</code> mrtvý adresář (na Windows běžně: zbylý<br />
+<code>ORIG_HEAD</code> a spol., <code>Permission denied</code>, a přesto rc 0), nástroj ohlásí<br />
+úspěch. Chip doplní ověření a doklizení metadat.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>uklid()</code> po každém <code>git worktree prune</code> ověří, že adresář metadat<br />
+      chipu (<code>.git/worktrees/&lt;jméno worktree&gt;</code>) opravdu zmizel — obě volání,<br />
+      ř. ~250 (větev „worktree na disku není") i ř. ~263 (po ručním mazání)</li>
+<li>[x] #2 — když adresář metadat po prune zůstal, smazat ho rekurzivně<br />
+      (<code>smaz_strom</code> nebo ekvivalent) — git ho už nevlastní (prune na něm hlásí<br />
+      „gitdir file does not exist"), zbývá v něm jen <code>ORIG_HEAD</code>/<code>logs</code>/<code>refs</code></li>
+<li>[x] #3 — když se metadata nepodaří doklidit ani ručně: nenulový rc a hláška<br />
+      se jménem adresáře, ne tiché <code>return 0</code> — stejný vzor, jaký už <code>uklid()</code><br />
+      má pro pracovní strom (<code>worktree.exists()</code> po <code>smaz_strom</code>)</li>
+<li>[x] #4 — test: fixture s reálným repem + worktree, pracovní strom smazaný<br />
+      ručně a v <code>.git/worktrees/&lt;jméno&gt;</code> nastražený soubor (simulace husku) →<br />
+<code>uklid()</code> metadata dorazí a vrátí 0</li>
+<li>[x] #5 — regresní test na úspěšnou cestu: <code>worktree remove</code> projde, metadata<br />
+      zmizí sama, <code>uklid()</code> vrací 0 a nic nedomazává</li>
+<li>[x] #6 — docstring <code>uklid()</code> doplnit: úspěch = pracovní strom PRYČ <strong>a</strong><br />
+      metadata PRYČ; rc prune se nečte proto, že git vrací 0 i při<br />
+      „Permission denied" — proto se výsledek měří stavem na disku</li>
+</ul>
+<blockquote>
+<p>Strop: 10–20 issues. Víc → rozřež na dva chipy.</p>
+</blockquote>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<p>Seznam souborů/adresářů, které tenhle chip smí měnit. <strong>Žádný jiný chip je nesmí<br />
+mít v seznamu</strong> — kontroluje <code>tools/chip_lint.py</code>.</p>
+<pre><code>tools/chip_run.py
+tests/test_chip_run.py
+</code></pre>
+<p>Cesty jsou <strong>relativní k <code>repo:</code></strong> (bez <code>..</code>, bez disku). Ve stavu <code>ready</code> lint<br />
+ověří, že v repu opravdu existují — soubor, který teprve vznikne, označ <code># nový</code>,<br />
+jinak je nárok hlášený jako překlep.</p>
+<p>Soubory mimo tento seznam se <strong>nemění</strong>. Když je to nutné → eskalace (viz níže).</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<p>Musí jít ověřit příkazem, ne názorem.</p>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde. Výchozí stav před<br />
+      chipem: <strong>681 testů, čisté <code>OK</code></strong> (ověřeno 2026-07-31). Po chipu počet<br />
+      stoupne (testy k #4 a #5) a výsledek zůstane čisté <code>OK</code>.<br />
+      → <strong>692 testů, čisté <code>OK</code></strong> (+11).</li>
+<li>[x] <code>python tools/chip_lint.py</code> → rc 0, bez chyb</li>
+<li>[x] Test z #4 při vráceném starém chování (<code>git stash</code> změn v<br />
+<code>tools/chip_run.py</code>) <strong>selže</strong> — jinak neměří opravu, ale počasí<br />
+      → ověřeno dvakrát, viz Log.</li>
+<li>[x] <code>python tools/chip_run.py 25 --dry-run</code> funguje jako dnes (úklid se<br />
+<code>--dry-run</code> nepotkává, ale spouštěcí cesta nesmí být dotčená) → rc 0,<br />
+      výpis beze změny.</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, otevři PR.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+python tools/chip_run.py 25 --dry-run
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, otevři PR s otázkou, nehádej.</strong></p>
+<ul>
+<li>změna veřejného API nebo formátu dat</li>
+<li>migrace schématu / nevratná operace nad daty</li>
+<li>nová závislost nebo změna licence</li>
+<li>bezpečnostní rozhodnutí, cokoli se secrets</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+<li><strong>mazání čehokoli v <code>.git/</code> nad rámec <code>.git/worktrees/&lt;jméno worktree
+  TOHOTO chipu&gt;</code></strong> — doklizení je chirurgické, žádné plošné <code>rm -rf
+  .git/worktrees</code>; jednorázový úklid nakupené historie už udělal orchestrátor<br />
+  ručně 2026-07-31, chip řeší jen budoucí běhy</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<p><strong>Diagnóza je hotová, neopakuj ji.</strong> Ověřeno 2026-07-31 na tomto repu<br />
+(Windows 11, 24 nakupených adresářů z chipů 01–24):</p>
+<ul>
+<li><code>git worktree prune -v</code> na mrtvém adresáři vypíše <code>Removing …: gitdir file
+  does not exist</code>, pak <code>error: failed to delete …: Permission denied</code> — a<br />
+  přesto skončí <strong>rc 0</strong>. Chyba mazání je pro git jen poznámka, ne selhání.<br />
+  Proto nestačí začít číst rc prune; úspěch se musí měřit stavem na disku,<br />
+  stejně jako to <code>uklid()</code> už dělá u pracovního stromu.</li>
+<li>Adresář nejde smazat, protože v něm zbývá <code>ORIG_HEAD</code>, <code>logs/</code>, <code>refs/</code>.<br />
+  Rekurzivní smazání (<code>rm -rf</code> ekvivalent) projde na první pokus — není to<br />
+  zámek antiviru ani OneDrive.</li>
+<li>Vzor je o pár řádků výš: u <code>worktree remove</code> už <code>uklid()</code> komentuje „git<br />
+  skončil nulou, ale adresář zůstal" a dokládá kontrolou <code>worktree.exists()</code>.<br />
+  Tutéž nedůvěru aplikuj na <code>prune</code>.</li>
+</ul>
+<p><strong>Kde to je.</strong> <code>tools/chip_run.py</code> → <code>uklid()</code> (~ř. 210): dvě volání<br />
+<code>git(repo, "worktree", "prune")</code> — ř. ~250 (větev „worktree na disku není —<br />
+jen uklidím metadata", vrací 0 bez jakékoli kontroly) a ř. ~263 (po ručním<br />
+<code>smaz_strom</code>). Jméno adresáře metadat = <code>Path(worktree).name</code>; kořen<br />
+<code>.git</code> ber přes git (<code>git rev-parse --git-dir</code> nebo <code>--git-path worktrees</code>),<br />
+ne skládáním <code>repo / ".git"</code> — repo může být samo worktree.</p>
+<p><strong>Konvence projektu</strong> (<code>CLAUDE.md</code>): stdlib <code>unittest</code>, žádný pytest; každý<br />
+test vlastní <code>tempfile</code> fixture s reálným <code>git init</code> repem a uklidí po sobě;<br />
+<code>chip_common.CHIPS_DIR</code> je globální stav — v <code>tearDown</code> ho vracej. Fixture<br />
+s worktree už v <code>tests/test_chip_run.py</code> existují — vyjdi z nich. Simulace<br />
+husku v testu: založ worktree, smaž jeho pracovní strom ručně a do<br />
+<code>.git/worktrees/&lt;jméno&gt;</code> polož soubor navíc; je to přenositelné, na Windows<br />
+se nespoléhej (<code>Permission denied</code> tam vyrábí git, ne filesystem).</p>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-31</td>
+<td>draft</td>
+<td>založeno</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>ready</td>
+<td>Variantu vybral uživatel: oprava přes chip + jednorázové smetení 23 husků udělal orchestrátor ručně hned (záloha ve scratchpadu, <code>git fsck</code> rc 0, <code>prune</code> po úklidu mlčí). Výchozí stav sady: 681 testů, čisté <code>OK</code>; lint rc 0.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>running</td>
+<td><strong>Oprava #1–#3, #6.</strong> Přibyly <code>git_vystup()</code>, <code>cesta_metadat()</code>, <code>metadata_patri_worktree()</code> a <code>dokliz_metadata()</code>; <code>uklid()</code> teď vede přes <code>dokliz_metadata()</code> <strong>každou</strong> cestu, která končí úspěchem — obě po <code>prune</code> i tu po úspěšném <code>worktree remove</code>, aby „0 = uklizeno" znamenalo totéž všude. Cesta k metadatům se bere <code>rev-parse --git-path worktrees/&lt;jméno&gt;</code>: ověřeno, že míří do <em>společného</em> adresáře, takže odpoví správně i když je <code>repo</code> samo linkované worktree (<code>.git</code> je v něm soubor).</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>running</td>
+<td><strong>Odchylka od zadání #4, s doložením.</strong> Brief navrhoval simulovat husk nastraženým souborem v <code>.git/worktrees/&lt;jméno&gt;</code>. Ověřeno na git 2.53: <code>prune</code> ten soubor <strong>smete</strong> (<code>remove_dir_recursively</code>), takže by se testoval prázdný stav. Deterministickou a plně reálnou páku dělá <code>git worktree lock</code> — <code>prune</code> adresář mlčky nechá být a skončí rc 0, což je přesně pozorovaný stav z Windows (<code>gitdir file does not exist</code> + <code>Permission denied</code>, rc 0). Test to má vysvětlené v docstringu. Nastražený soubor v adresáři zůstal — dokládá, že se maže rekurzivně.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>running</td>
+<td><strong>Nad rámec zadání, uvnitř #2:</strong> před smazáním se kontroluje <code>gitdir</code> v adresáři metadat. Chybí-li, git adresář už nevlastní (to je ten husk); ukazuje-li jinam, sedí na jméně cizí worktree (git při kolizi jmen připojuje příponu) a nesahá se na něj. Je to čtení T3 pravidla „mazání je chirurgické" — bez té kontroly by šlo smazat metadata živého cizího worktree.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>running</td>
+<td><strong>Brána zelená, čeká na přepnutí stavu orchestrátorem.</strong> <code>unittest discover</code>: <strong>692 testů, <code>OK</code></strong> (681 → +11). <code>chip_lint.py</code> rc 0, 0 chyb / 0 varování. <code>chip_run.py 25 --dry-run</code> rc 0, výpis beze změny. Ověření, že testy měří opravu a ne počasí, proběhlo dvakrát: (a) chirurgicky — dočasný návrat <code>return 0</code> v jediné větvi → <code>test_prune_nechal_metadata_uklid_je_dorazi</code>, <code>test_nesmazatelna_metadata_konci_jednickou</code> i <code>test_cizi_metadata_stejneho_jmena_zustanou</code> padají na věcných assertech; (b) <code>git stash push -- tools/chip_run.py</code> dle DoD → test padá už na fixture (<code>chip_run</code> nemá <code>cesta_metadat</code>). Průkaznější je (a). Do hlavní větve nemergováno.</td>
+</tr>
+<tr>
+<td>2026-07-31</td>
+<td>merged</td>
+<td>Brána ověřena orchestrátorem nezávisle: <code>chip_gate.py 25</code> ZELENÁ, sada 692 testů čisté <code>OK</code> (681 → +11), rozsah jen 2 nárokované soubory + brief. Tvrzení „testy měří opravu" ověřeno vlastní sabotáží (návrat <code>return 0</code> v jediné větvi → padají 3 testy na věcných assertech), pak <code>git checkout</code> zpět. Po mergi na masteru: 692 testů <code>OK</code>, lint rc 0. <strong>Ostrá zkouška opravy:</strong> <code>--uklid</code> nad reálným worktree — <code>worktree remove</code> selhal dvakrát na „Permission denied", ruční smazání prošlo, <code>prune</code> nechal metadata a nový kód je odchytil (<code>prune nechal metadata … — mažu ručně</code>), rc 0, <code>.git/worktrees</code> prázdný. Přesně scénář, který dřív skončil mlčky.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>25-uklid-metadata.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>

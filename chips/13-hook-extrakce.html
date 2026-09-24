@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 13 — hook čte větev a repo ze špatného místa příkazu</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 13<br />
+nazev: hook-extrakce<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-13/hook-extrakce<br />
+worktree: ../CHIPS-chip-13</p>
+<hr />
+<h1 id="chip-13-hook-cte-vetev-a-repo-ze-spatneho-mista-prikazu">CHIP 13 — hook čte větev a repo ze špatného místa příkazu</h1>
+<p>První polovina rozřezaného chipu 10 (čtyři díry v hooku z externího code<br />
+review). Tenhle chip řeší <strong>čtení vstupu</strong>: z jakého místa složeného příkazu<br />
+hook bere název větve a cílový repozitář. Druhá polovina (kdy zamítnout) je<br />
+chip 14, který na tenhle navazuje.</p>
+<p>Obě díry jsou v prostoru složených příkazů (<code>&amp;&amp;</code>, <code>;</code>), který testy nepokrývaly.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <strong>Hook bere PRVNÍ chip token v příkazu, ne argument merge</strong><br />
+      (<code>VETEV.search(prikaz)</code>, ř. ~106). <code>git branch -d ai/chip-04/x &amp;&amp; git
+      merge ai/chip-05/y</code> ověří bránu chipu 04 a pustí merge chipu 05.<br />
+      Oprav: větev se musí extrahovat z argumentu <strong>za <code>merge</code></strong> — regex<br />
+      kotvený na <code>\bmerge\b</code> s přeskočením přepínačů (<code>--no-ff</code>, <code>--squash</code>,<br />
+<code>-m "…"</code> a spol.), ne <code>search</code> přes celý řetězec.</li>
+<li>[x] #2 — <strong><code>cilove_repo()</code> bere první <code>git -C</code>/<code>cd</code> kdekoli v příkazu</strong><br />
+      (ř. ~51), i když patří jinému git volání než samotnému merge; relativní<br />
+      cesty navíc resolvuje proti cwd hook procesu místo session cwd z payloadu.<br />
+      Oprav obojí: <code>git -C</code> hledat jen v té části příkazu, která obsahuje<br />
+      merge; relativní cesty resolvovat proti <code>data["cwd"]</code>.</li>
+<li>[x] #3 — regresní testy na oba scénáře; každý musí na PŮVODNÍ verzi hooku<br />
+      selhat (ověř podstrčením staré verze, hlášky zapiš do Logu)</li>
+<li>[x] #4 — stávající testy (<code>TestHook</code>, parity test) musí dál procházet;<br />
+      co se změnou rozbije právem, uprav s komentářem proč</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/hook_chip_gate.py
+tests/test_chip_gate.py
+</code></pre>
+<p>Nesahej na <code>chip_gate.py</code> (parity test s ním musí dál platit — když potřebuješ<br />
+změnit sdílené jádro vzoru, zapiš do Logu a vyřeš to jen na straně hooku),<br />
+ani na <code>chip_lint.py</code>, <code>chip_common.py</code>, <code>chip_slice.py</code>, <code>chip_run.py</code>.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, 0 selhání</li>
+<li>[x] scénář z #1 (<code>branch -d</code> chipu A + <code>merge</code> chipu B v jednom příkazu)<br />
+      ověřuje bránu chipu B — pokryto testem</li>
+<li>[x] <code>git -C</code> patřící jinému volání než merge se ignoruje — test</li>
+<li>[x] relativní cesta se resolvuje proti <code>cwd</code> z payloadu, ne proti cwd<br />
+      procesu — test</li>
+<li>[x] oba nové testy na původní verzi hooku selžou (doloženo v Logu)</li>
+<li>[x] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna <code>chip_gate.py</code>, <code>chip_lint.py</code>, <code>chip_common.py</code></li>
+<li><strong>oslabení hooku</strong>: kdyby oprava vyžadovala, aby hook v jiném případě mlčel<br />
+  tam, kde dnes blokuje — zastav se a zapiš do Logu</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Hook čte JSON na stdin (<code>tool_input.command</code>, <code>cwd</code>), výstup je buď nic<br />
+  (povoleno) nebo JSON s <code>permissionDecision: deny</code>. Vzor volání s podstrčeným<br />
+  stdin je v <code>tests/test_chip_gate.py</code>, třída <code>TestHook</code>.</li>
+<li>Bias projektu: <strong>raději zamítnout navíc než pustit červený merge.</strong> Falešný<br />
+  poplach stojí uživatele vysvětlení; propuštěný červený merge stojí důvěru<br />
+  v celou bránu.</li>
+<li>Pozor na parity test <code>test_hook_a_brana_poznaji_stejne_vetve</code> — hlídá shodu<br />
+  vzoru s <code>chip_gate.VETEV_CHIP</code>. Když změníš způsob extrakce (kotvení na<br />
+  merge), parity test se možná musí přeformulovat: porovnávej rozpoznání<br />
+<em>názvu větve</em>, ne celé komandliny. Zapiš do Logu, jak jsi to vyřešil.</li>
+<li>Rozsah čísla chipu ve vzoru je <code>(\d+)</code> — <strong>neměň ho na <code>\w+</code></strong>, jinak by<br />
+<code>ai/chip-10a/…</code> matchovalo jako chip 10. Číslo je číslo.</li>
+<li>Regresní důkaz: původní verzi vytáhni <code>git show HEAD:tools/hook_chip_gate.py</code><br />
+  do dočasného souboru a <strong>zaregistruj do <code>sys.modules</code> před importem testů</strong><br />
+  (<code>sys.path.insert</code> nestačí — načte se opravená verze a důkaz je bezcenný).</li>
+<li>Konvence: hlášky česky, docstringy vysvětlují proč, dvě mezery odsazení.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>první polovina rozřezaného chipu 10 (nálezy #1 a #2)</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#1: příkaz se dělí na segmenty (<code>&amp;&amp;</code>, <code>||</code>, <code>;</code>, <code>|</code>, newline) a v segmentu se hledá <code>merge</code> jako CELÝ token po tokenu s <code>git</code> — ne podřetězcem, jinak by <code>git -C /x/merge/y status</code> vypadalo jako merge. Nová <code>cisla_chipu()</code> bere jen POZIČNÍ argumenty za <code>merge</code>: <code>pozicni()</code> přeskakuje přepínače, u hodnotových (<code>-m/--message</code>, <code>-F/--file</code>, <code>-s/--strategy</code>, <code>-X/--strategy-option</code>, <code>--into-name</code>) i jejich token; <code>-S</code>/<code>--gpg-sign</code>/<code>--log</code> berou hodnotu jen připojenou, takže jsou v seznamu schválně NEjsou. Neznámý <code>-x</code> = přepínač bez hodnoty (radši token navíc k prozkoumání než přeskočená větev). <code>tokeny()</code> drží uvozovaný celek pohromadě kvůli <code>-m "merge ai/chip-01/x"</code>. Octopus merge (<code>git merge A B</code>) ověřuje bránu KAŽDÉ chip větve, zamítá na první červené — dřív prošla druhá. Vzor <code>VETEV</code> zůstal beze změny včetně <code>(\d+)</code>.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#2: <code>cilove_repo()</code> bere <code>git -C</code> jen ze segmentu, který merge doopravdy spouští; <code>cd</code> ze segmentů PŘED merge (platí i pro následující příkazy) a skládá se postupně, takže <code>cd a &amp;&amp; cd b</code> sedí. Relativní cesty jdou přes <code>slozit()</code> proti <code>data["cwd"]</code> z payloadu, ne proti cwd hook procesu; když výsledek není adresář, drží se dosavadní základ (špatný odhad repa je horší než žádný).</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#4 parity test: přeformulovávat se NEMUSEL a <code>chip_gate.py</code> zůstal nedotčený — vzor <code>VETEV</code> se neměnil, změnilo se jen MÍSTO, na které se pouští. Test jsem naopak rozšířil o druhý průchod přes <code>hook.cisla_chipu(f"git merge {v}")</code>, aby hlídal i novou cestu, ne jen shodu regexů. Odsazení: brief mluví o dvou mezerách, ale celý <code>tools/</code> je 4 mezery (PEP 8) — držel jsem se souboru, míchání by bylo horší. Žádný stávající test se změnou nerozbil (0 úprav existujících testů).</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>#3 regresní důkaz (<code>git show HEAD~1:tools/hook_chip_gate.py</code> + registrace do <code>sys.modules</code> před importem testů, ověřeno assertem <code>t.hook is mod</code>): 18/18 nových testů na PŮVODNÍ verzi selhalo (10 FAIL + 16 ERROR, subTesty). Hlášky hooku: „hook mlčel — ověřil bránu chipu 01 místo mergovaného 02 a pustil merge s červenou bránou"; „hook vzal chip ze zprávy <code>-m</code> a pustil červený merge"; „hook ověřil jen první větev octopus merge"; „hook hledal repo podle cizího <code>git -C</code> a mlčel"; „hook resolvoval relativní <code>git -C repo</code> proti cwd procesu, repo nenašel a červený merge pustil". <code>cilove_repo</code>: „WindowsPath('…/jine') != WindowsPath('…/repo')" (cizí <code>-C</code>) a „WindowsPath('…/tmpXXXX') != WindowsPath('…/tmpXXXX/repo')" (relativní cesta). <code>TestCislaChipu</code> + parity: „AttributeError: module 'hook_chip_gate' has no attribute 'cisla_chipu'". Na opravené verzi 18/18 OK.</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>ready</td>
+<td>Brána: <code>python -m unittest discover -s tests -v</code> → <strong>383 testů, 0 selhání</strong> (před chipem 366 → +17 testů, parity test rozšířen o subTesty). <code>python tools/chip_lint.py</code> → rc 0, 0 chyb, 4 varování (3 placeholdery v briefech 08/09/12 existovaly už před chipem + informace, že chip 14 čeká na 13). Jen stdlib (<code>re</code>, <code>json</code>, <code>os</code>, <code>sys</code>, <code>pathlib</code>). Žádný T3: <code>chip_gate.py</code> ani ostatní cizí soubory jsem nesáhl, hook nikde nezmlkl tam, kde dřív blokoval — jen naopak. <code>.html</code> k briefu nepřegenerováno (soubor mimo NÁROK, <code>md2html.py --all</code> sahá na celé repo) — dělá orchestrátor po merge.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>13-hook-extrakce.md</code> &middot; CHIP 13 — hook čte větev a repo ze špatného místa příkazu</div>
+</body>
+</html>

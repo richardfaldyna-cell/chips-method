@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 06 — sloučit duplicitní helpery do `chip_common.py`</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 06<br />
+nazev: sdilene-helpery<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-06/sdilene-helpery<br />
+worktree: ../CHIPS-chip-06</p>
+<hr />
+<h1 id="chip-06-sloucit-duplicitni-helpery-do-chip_commonpy">CHIP 06 — sloučit duplicitní helpery do <code>chip_common.py</code></h1>
+<p>Dva chipy z vlny 1 si musely lokálně napsat funkci, která patří do sdíleného<br />
+modulu — nesměly na něj sáhnout, protože si ho nárokoval někdo jiný. Obojí<br />
+eskalovaly do Logu místo hádání. Tenhle chip ten dluh splácí.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — přesunout počítání odškrtnutých issues z <code>chip_status.py</code> do <code>chip_common.Chip</code> (metoda vracející hotové issues, aby šlo psát <code>hotové/celkem</code>)</li>
+<li>[x] #2 — přesunout <code>prepis_stav()</code> z <code>chip_run.py</code> do <code>chip_common.py</code> (textový přepis <code>stav:</code> v prvním frontmatteru, bajtově bezpečný)</li>
+<li>[x] #3 — <code>chip_status.py</code> i <code>chip_run.py</code> volají nově sdílenou verzi; lokální kopie zmizí beze zbytku</li>
+<li>[x] #4 — chování zůstává <strong>beze změny</strong>: stejné výstupy, stejné návratové kódy, stejné hlášky</li>
+<li>[x] #5 — testy sdílených funkcí patří do <code>tests/test_chip_common.py</code>; v <code>test_chip_status.py</code> a <code>test_chip_run.py</code> nech jen testy chování nástrojů</li>
+<li>[x] #6 — <code>prepis_stav()</code> musí umět i cílový stav jiný než <code>running</code> (orchestrátor přepíná na <code>merged</code>) a nesmí sáhnout na soubor, když není co měnit</li>
+<li>[x] #7 — celá stávající sada testů musí projít beze změny počtu selhání</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_common.py
+tools/chip_status.py
+tools/chip_run.py
+tests/test_chip_common.py
+tests/test_chip_status.py
+tests/test_chip_run.py
+</code></pre>
+<p>Nesmíš měnit <code>tools/chip_lint.py</code> ani <code>tests/test_chip_lint.py</code> — nárokuje si je<br />
+paralelně běžící chip 05. Pokud tvoje změna v <code>chip_common.py</code> rozbije lint,<br />
+je to chyba tohoto chipu: <code>chip_common</code> je sdílený základ, ne prostor pro<br />
+přejmenovávání. <strong>Nic ze stávajícího veřejného API neodstraňuj ani nepřejmenovávej.</strong></p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[ ] <code>python -m unittest discover -s tests -v</code> projde, počet selhání se oproti dnešku nezhorší</li>
+<li>[ ] <code>grep</code> neukáže žádnou duplicitní implementaci obou funkcí mimo <code>chip_common.py</code></li>
+<li>[ ] <code>python tools/chip_status.py --dir chips</code> vypíše stejnou tabulku jako před zásahem (porovnej s baseline pořízenou PŘED úpravou)</li>
+<li>[ ] <code>python tools/chip_run.py 06 --dry-run</code> funguje jako dnes</li>
+<li>[ ] <code>python tools/chip_lint.py</code> vrací 0</li>
+<li>[ ] pouze standardní knihovna</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, popiš proč v Logu.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_status.py --dir chips
+python tools/chip_run.py 06 --dry-run
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, zapiš do Logu, nehádej.</strong></p>
+<ul>
+<li>změna <code>chip_lint.py</code> nebo <code>tests/test_chip_lint.py</code> (nárokuje si je chip 05)</li>
+<li>odstranění nebo přejmenování stávající funkce/metody v <code>chip_common.py</code></li>
+<li>změna formátu briefu, frontmatteru nebo šablony</li>
+<li>nová závislost mimo stdlib</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Původ obou dluhů je zapsaný v Logu briefů <code>chips/02-chip-status.md</code> a<br />
+<code>chips/04-run-spusteni.md</code> — přečti si je, ať víš, proč to tak vzniklo.</li>
+<li><code>chip_common.py</code> je záměrně bez závislostí (vlastní mini-parser místo PyYAML).<br />
+  Drž ten styl: stdlib, krátké funkce, české docstringy vysvětlující <em>proč</em>.</li>
+<li><code>prepis_stav()</code> v <code>chip_run.py</code> pracuje přes <code>read_bytes</code>/<code>write_bytes</code> a regex<br />
+  omezený na první frontmatter — zachovej to, je to kvůli CRLF a diakritice.</li>
+<li>Odškrtnuté issues se poznají podle <code>- [x]</code>; <code>Chip.issues()</code> dnes vrací text<br />
+  bez značky, takže se z něj hotové poznat nedají — proto ta lokální kopie.</li>
+<li><strong>Nejdřív si pořiď baseline</strong>: spusť <code>python tools/chip_status.py --dir chips</code><br />
+  a <code>python tools/chip_run.py 06 --dry-run</code> PŘED zásahem a výstupy si ulož do<br />
+  scratchpadu; DoD po tobě chce porovnání.</li>
+<li>Import v testu: <code>sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))</code>.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno orchestrátorem ze dvou eskalací vlny 1</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td>baseline výstupů (<code>chip_status --dir chips</code>, <code>chip_run 06 --dry-run</code>, <code>chip_lint</code>) pořízen PŘED zásahem do scratchpadu; po refaktoru jsou všechny tři <strong>bajt v bajt shodné</strong> (<code>cmp</code>)</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td><code>hotove_issues()</code> je nově metoda <code>Chip</code> a vrací <strong>seznam textů</strong> (ne počet) — <code>len(c.hotove_issues())/len(c.issues())</code>; regex má stejný tvar jako <code>ISSUE</code>, takže hotové jsou vždy podmnožinou celkových</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td>jediný rozdíl proti staré verzi je degenerovaný řádek <code>- [x]</code> úplně bez textu: dřív se počítal do čitatele (ale ne do jmenovatele, <code>issues()</code> vyžaduje text), nově se nepočítá ani do jednoho. V žádném briefu ani testu se nevyskytuje, výstupy jsou shodné; sjednocení je smyslem issue #1</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td><code>prepis_stav()</code> přesunut do <code>chip_common.py</code> beze změny těla (<code>read_bytes</code>/<code>write_bytes</code> + regex na první frontmatter kvůli CRLF a diakritice); <code>chip_run</code> ho jen importuje, test <code>test_pouziva_sdilenou_funkci</code> hlídá, že se kopie nevrátí</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>running</td>
+<td>z veřejného API <code>chip_common</code> nic neubylo ani se nepřejmenovalo — jen přibylo (<code>ISSUE</code>, <code>HOTOVA_ISSUE</code>, <code>STAV_RADEK</code>, <code>Chip.hotove_issues</code>, <code>prepis_stav</code>); <code>chip_lint.py</code> ani <code>tests/test_chip_lint.py</code> jsem nesahal (nárok chipu 05)</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>gated</td>
+<td>brána zelená: 183 testů OK (1 očekávané selhání, stejně jako v baseline 169/1), <code>chip_status --dir chips</code> i <code>chip_run 06 --dry-run</code> beze změny chování, <code>chip_lint.py</code> exit 0. Merge nechávám na uživateli.</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>merged</td>
+<td>brána ověřena orchestrátorem (183 testů, bajtová shoda výstupů), sloučeno</td>
+</tr>
+<tr>
+<td>2026-07-27</td>
+<td>merged</td>
+<td>Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>06-sdilene-helpery.md</code> &middot; CHIP 06 — sloučit duplicitní helpery do `chip_common.py`</div>
+</body>
+</html>

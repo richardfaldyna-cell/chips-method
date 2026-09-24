@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 21 — reviewer tvrdí nález tam, kde má položit otázku</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 21<br />
+nazev: review-signal<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+greenfield: ne       # 'ano' = repo teprve vznikne<br />
+vetev: ai/chip-21/review-signal<br />
+worktree: ../CHIPS-chip-21</p>
+<hr />
+<h1 id="chip-21-reviewer-tvrdi-nalez-tam-kde-ma-polozit-otazku">CHIP 21 — reviewer tvrdí nález tam, kde má položit otázku</h1>
+<p><code>chip_review.py</code> vypisuje řádek typu „N odškrtnutých DoD proti M příkazům<br />
+brány". Tváří se jako nález, ale je to <strong>falešný signál</strong>: většina bodů DoD se<br />
+ověřuje testy uvnitř sady, ne samostatným příkazem v sekci „Ověření (brána)".<br />
+Poměr 8 : 2 je tedy normální stav, ne podezření.</p>
+<p>Vada není v tom, že by to bylo nepravdivé — je v tom, že to <strong>vypadá jako<br />
+nález</strong>. Reviewer, který hlásí šum, si vychová čtenáře, který ho přeskakuje;<br />
+pak mu unikne i ten řádek, který je pravý. Je to táž vada, jakou opravoval<br />
+chip 15 u placeholderů v lintu, jen v jiném nástroji.</p>
+<p>Řešení není řádek smazat — informace je užitečná. Je to <strong>přeformulovat na<br />
+otázku</strong>, tedy na to, čím ve skutečnosti je: podnětem k ověření, ne verdiktem.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — řádek o poměru DoD × příkazy brány se vypisuje jako <strong>otázka pro<br />
+      reviewera</strong>, ne jako nález (např. „ověř, čím jsou kryté body DoD, které<br />
+      nemají vlastní příkaz brány")</li>
+<li>[x] #2 — otázky jsou ve výstupu <strong>vizuálně oddělené</strong> od nálezů; z výstupu<br />
+      musí jít poznat, co je zjištění a co podnět</li>
+<li>[x] #3 — projdi zbylé řádky, které <code>chip_review.py</code> vypisuje, a rozhodni<br />
+      u každého, jestli je to nález, nebo otázka. Co je otázka, přesuň.<br />
+      Rozhodnutí u každého zapiš do Logu — je to hlavní obsah tohohle chipu.</li>
+<li>[x] #4 — skutečné nálezy zůstávají nálezy: soubor mimo nárok, nedotčený<br />
+      nárok, podezřelý test (<code>podezrele_testy</code>) — ty se <strong>nepřesouvají</strong></li>
+<li>[x] #5 — počty v souhrnu ať rozlišují nálezy a otázky, ne jedno číslo</li>
+<li>[x] #6 — když nejsou žádné nálezy ani otázky, ať to nástroj řekne jednou<br />
+      větou a nevypisuje prázdné sekce</li>
+<li>[x] #7 — testy: řádek o DoD se za normálního stavu (8 DoD, 2 příkazy) <strong>neobjeví<br />
+      mezi nálezy</strong>; dnešní chování by test neprošlo</li>
+<li>[x] #8 — testy k rozdělení nález/otázka a k souhrnu</li>
+<li>[x] #9 — docstring modulu doplnit o to, proč se rozlišuje nález a otázka</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_review.py
+tests/test_chip_review.py
+</code></pre>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> projde a testů je <strong>víc</strong> než<br />
+      dnešních 523</li>
+<li>[x] <code>python tools/chip_review.py 17</code> (zmergovaný chip) nevypíše řádek o DoD<br />
+      mezi nálezy; dnes ho tam vypíše</li>
+<li>[x] test, který postaví chip s 8 body DoD a 2 příkazy brány a ověří, že<br />
+<strong>počet nálezů je 0</strong> — to je jádro chipu</li>
+<li>[x] test, který ověří, že soubor změněný mimo nárok je pořád <strong>nález</strong></li>
+<li>[x] výstup nástroje projde očima: v Logu je vzorový výstup před a po</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Zastav se, zapiš do Logu a nech na uživateli:</p>
+<ul>
+<li><strong>zeslabení kontrol, které jsou skutečné nálezy</strong> (mimo nárok, nedotčený<br />
+  nárok, podezřelý test) — reviewer je poslední síto po bráně</li>
+<li>úplné odstranění informace místo jejího přeformulování</li>
+<li>jakýkoli zásah mimo „Dotčené soubory"</li>
+<li>nová externí závislost</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Testy: <code>python -m unittest discover -s tests -v</code>, stdlib <code>unittest</code>, <strong>žádný<br />
+  pytest</strong>. Vlastní <code>tempfile</code> fixture, úklid po sobě.</li>
+<li><code>chip_common.CHIPS_DIR</code> je globální stav; v <code>tearDown</code> ho vracej.</li>
+<li><strong>Přečti si <code>chip_lint.PLACEHOLDERY</code> a docstring třídy <code>Placeholder</code>.</strong> Je<br />
+  tam napsané, proč se šum v nástroji řeší zúžením, ne ztlumením — chip 15<br />
+  řešil přesně tenhle druh vady a jeho odůvodnění platí i tady.</li>
+<li><code>chip_review.py</code> je <strong>podklad pro člověka/agenta</strong>, ne brána — nevrací<br />
+  exit 1 při nálezu. Tím spíš musí být jeho výstup čitelný.</li>
+<li><code>dod_body()</code> a <code>pomer()</code> jsou funkce, kterých se to týká nejvíc.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-28</td>
+<td>ready</td>
+<td>brief založen orchestrátorem</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>#3 — rozhodnutí u KAŽDÉHO vypisovaného řádku.</strong> (a) <code>— commit nemění žádný soubor</code> = DATA: prázdný commit se ohlásí sám v nedotčených nárocích, druhý poplach o téže věci je šum. (b) řádky souborů + <code>celkem:</code> = DATA (inventura). (c) <code>nárok: …</code> = DATA. (d) <code>X MIMO NÁROK: …</code> = <strong>NÁLEZ, tvrdý</strong> (jediný, co zvedá rc) — beze změny. (e) <code>OK — každá změna spadá pod nárok</code> = DATA. (f) <code>! nárok '…' nemá v commitu jedinou změnu</code> = <strong>NÁLEZ</strong> — beze změny, nástroj má úplná data o tom, co v commitu je a co ne, ptát se nemá proč. (g) <code>! commit nemění žádný testovací soubor</code> = <strong>ROZDĚLENO</strong>: sahá-li commit na kód, je to NÁLEZ a nově jmenuje ty soubory (<code>commit mění kód (tools/x.py), ale žádný testovací soubor</code>); mění-li commit jen dokumentaci, není to signál vůbec, jen věta „commit nemění kód ani testy". Zúžení, ne ztlumení — přesně postup chipu 15 u placeholderů: hlásit tam, kde chybějící test škodí, a nikde jinde. (h) <code>! …: obsah se nepodařilo přečíst</code> = <strong>OTÁZKA</strong> — to není tvrzení o kódu, ale přiznání, že nástroj nemá co posoudit; text nově říká, co udělat („projdi soubor ručně"). (i) <code>podezrele_testy</code> (bez assertu / @skip / @expectedFailure / nelze naparsovat) = <strong>NÁLEZ</strong> — beze změny. (j) <code>OK — N testovacích souborů…</code> = DATA; opraveno skloňování („1 testovacích soubor" → „1 testovací soubor"). (k) <code>! brief nemá v DoD jediný bod</code> = <strong>NÁLEZ</strong> (odškrtnutí nemá co ověřit). (l) <code>[x] text</code> = DATA. (m) <code>! žádný příkaz — odškrtnutí nemá co ověřit</code> = <strong>NÁLEZ</strong>, přeformulováno na „brána nespouští jediný příkaz…" (chip bez brány se nesmí mergovat). (n) <code>! N odškrtnutých bodů proti M příkazům brány — čím je ověřený zbytek?</code> = <strong>OTÁZKA</strong> (jádro chipu), nově „ověř, čím jsou kryté body bez vlastního příkazu (typicky testy uvnitř sady)"; navíc se nevydává, když brána nemá ani jeden příkaz — tam už mluví nález (m) a dvojí hlášení téhož je šum. (o) <code>kód/testy/dokumentace</code> + <code>poměr testy:kód</code> = DATA: ukazatel bez prahu, práh nástroj nezná, takže z něj nedělá ani nález, ani otázku.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>#1/#2/#5/#6 — jak.</strong> Nový <code>Signal(druh, text, tvrdy)</code> + zkratky <code>nalez()</code> / <code>otazka()</code> / <code>vyber()</code>; každá <code>sekce_*</code> vrací <code>(řádky, signály)</code> místo holých řádků, takže o druhu rozhoduje místo vzniku, ne formátování. Sekce ve výpisu nesou jen DATA, posuzující řádky sbírá <code>sekce_signaly()</code> a tiskne je pod sebe: „Nálezy — tohle je špatně" (<code>X</code> = tvrdé pravidlo metodiky, <code>!</code> = podklad) a „Otázky — tohle nástroj rozhodnout neumí, ověř ty" (<code>?</code>). Prázdná sekce se nevypíše (nadpis nad ničím je taky návod k přeskakování), a když není ani jedno, je to jedna věta „Bez nálezů a bez otázek — co jde ověřit strojově, sedí." Souhrn počítá odděleně a skloňuje („Souhrn: 2 nálezy, 1 otázka." / „0 nálezů, 1 otázka."). Návratový kód se nezměnil: 1 jen u tvrdých signálů (soubor mimo nárok), zbytek pořád podklad. Sekce „Podezřelé testy" nikdy nezůstane holým nadpisem — když signály putují dolů, řekne aspoň, kolik souborů prošla.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>#7/#8 — testy: 523 → 546 (+23), žádný stávající test neoslaben.</strong> Jádro: <code>test_pomer_dod_a_brany_je_otazka_ne_nalez</code> (8 bodů : 2 příkazy → nálezů 0, otázka 1) a end-to-end <code>test_normalni_pomer_dod_nedela_nalez</code> (čistý commit + 8:2 → rc 0, „Souhrn: 0 nálezů, 1 otázka.", řetězec „Nálezy" ve výstupu vůbec není). Protipól k oslabení: <code>test_soubor_mimo_narok_je_tvrdy_nalez</code>, <code>test_soubor_mimo_narok_zustava_nalezem</code> (hlášku hledá v části výstupu ZA nadpisem Nálezy, ne kdekoli), <code>test_nedotceny_narok_je_nalez_ne_otazka</code>, <code>test_podezrely_test_je_nalez</code>. K zúžení (g): <code>test_kod_bez_jedineho_testu_je_nalez</code> vs. <code>test_commit_jen_s_dokumentaci_nic_nehlasi</code>. Dál <code>test_neprecteny_soubor_je_otazka</code>, <code>test_brief_bez_bodu_dod_je_nalez</code>, <code>test_brana_bez_prikazu_je_nalez</code>, <code>test_vyrovnany_pomer_nevyda_zadny_signal</code>, <code>test_sekce_neni_nikdy_holy_nadpis</code> a třída <code>TestVypisSignalu</code> (7 testů na rozdělení, značky, skloňování a jednu větu prázdného stavu). Nové fixture pomůcky <code>prepis_dod(dod, prikazy)</code> a <code>ciste_zmeny()</code> jsou přídavek, stávající <code>Zaklad</code> se chová stejně.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td><strong>Vzorový výstup PŘED a PO</strong> (chip 17, commit <code>24c3528</code>; PŘED = <code>git show HEAD:tools/chip_review.py</code> pouštěné vedle). PŘED, sekce DoD končila: „$ python -m unittest discover -s tests -v / $ python tools/chip_lint.py / <strong>! 5 odškrtnutých bodů proti 2 příkazům brány — čím je ověřený zbytek?</strong>" a výpis zavíralo „Podklady sebrány." — jediný <code>!</code> celého běhu byl přitom falešný poplach, u zmergovaného a prověřeného chipu. PO: sekce DoD končí u příkazů brány, a pod výpisem stojí „Otázky — tohle nástroj rozhodnout neumí, ověř ty / ? 5 odškrtnutých bodů DoD proti 2 příkazům brány — ověř, čím jsou kryté body bez vlastního příkazu (typicky testy uvnitř sady)" a „<strong>Souhrn: 0 nálezů, 1 otázka.</strong>". Kontrola opačným směrem (HEAD hlavního repa, kde chip 17 nárok opravdu nedotkl): 12 nálezů (10× MIMO NÁROK + 2× nedotčený nárok) v sekci Nálezy, otázka o DoD zvlášť — nálezy se rozdělením neztratily.</td>
+</tr>
+<tr>
+<td>2026-07-28</td>
+<td>running</td>
+<td>Brána: <code>python -m unittest discover -s tests -v</code> → <strong>546 testů, OK (expected failures=2 — patří chipu 20, nesaháno)</strong>; <code>python tools/chip_lint.py</code> → „0 chyb, 0 varování", rc 0. Změněné soubory: <code>tools/chip_review.py</code>, <code>tests/test_chip_review.py</code> (+ tenhle brief). Žádná nová závislost (stdlib <code>dataclasses</code>). <strong>T3: nic.</strong> Skutečné nálezy jsem nezeslabil ani nesmazal — mimo nárok, nedotčený nárok i podezřelý test zůstaly nálezy a jsou na to nové testy; informace o poměru DoD nezmizela, jen se přeformulovala na otázku. <code>.html</code> k briefu nepřegenerováno: <code>md2html.py</code> je nárok běžícího chipu 20 a HTML dělá orchestrátor po merge.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>21-review-signal.md</code> &middot; CHIP 21 — reviewer tvrdí nález tam, kde má položit otázku</div>
+</body>
+</html>

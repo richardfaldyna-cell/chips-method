@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIP 05 — oprava dvou děr v bráně</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 05<br />
+nazev: oprava-brany<br />
+stav: merged          # draft | ready | running | gated | merged | blocked<br />
+zavisi_na:<br />
+repo: ..<br />
+vetev: ai/chip-05/oprava-brany<br />
+worktree: ../CHIPS-chip-05</p>
+<hr />
+<h1 id="chip-05-oprava-dvou-der-v-brane">CHIP 05 — oprava dvou děr v bráně</h1>
+<p>Pilot vlny 1 odhalil dvě místa, kde <code>chip_lint.py</code> tvrdí „čisto", i když čisto<br />
+není. Obojí jsou přesně ty tiché chyby, kvůli kterým projekt vznikl.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <strong>N1: <code>prekryv()</code> neumí vzor × vzor.</strong> <code>prekryv("src/*.py", "src/mo*")</code> vrací <code>False</code>, přestože oba nároky sdílejí <code>src/modul.py</code>. Implementuj skutečný test průniku dvou glob vzorů (rekurzivně, podpora <code>*</code>, <code>?</code>, literálů; <code>[…]</code> ber konzervativně jako kolizi).</li>
+<li>[x] #2 — <code>src/*.py</code> × <code>tests/*.py</code> musí zůstat <code>False</code>; <code>src/a_*.py</code> × <code>src/b_*.py</code> musí být <code>False</code> (jsou opravdu disjunktní); <code>src/*.py</code> × <code>src/mo*</code> musí být <code>True</code></li>
+<li>[x] #3 — v <code>tests/test_chip_lint.py</code> zruš <code>@unittest.expectedFailure</code> u <code>TestPrekryv.test_prekryv_dvou_ruznotvarych_vzoru</code> (jinak sada spadne na <code>unexpected success</code>)</li>
+<li>[x] #4 — <strong>N2: kontrola existence cest se ptá špatného stromu.</strong> Když brief leží uvnitř git worktree, <code>repo:</code> z frontmatteru ukazuje na hlavní strom → lint ověřuje nároky proti cizímu checkoutu. Řeš to tak, že se strom pro kontrolu existence odvodí od umístění briefu, když je uvnitř gitu.</li>
+<li>[x] #5 — když brief leží mimo jakýkoli git strom (režim <code>--dir</code>), použije se dál <code>repo:</code> z frontmatteru — chování zůstává jako dnes</li>
+<li>[x] #6 — <code>chip_run.py</code> musí dál zakládat worktree podle <code>repo:</code> z frontmatteru, ne podle stromu briefu — proto změnu <strong>nedělej</strong> v <code>chip_common.repo_path()</code>, ale lokálně v <code>chip_lint.py</code></li>
+<li>[x] #7 — testy pro #1–#5, včetně případu „soubor je v hlavním stromě, ale ve worktree chybí → chyba"</li>
+<li>[x] #8 — po opravě musí celá sada projít bez jediného <code>expected failure</code></li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_lint.py
+tests/test_chip_lint.py
+</code></pre>
+<p>Nesmíš měnit <code>chip_common.py</code>, <code>chip_status.py</code> ani <code>chip_run.py</code> — nárokuje si je<br />
+paralelně běžící chip 06. Když potřebuješ pomocnou funkci, měj si ji lokálně<br />
+v <code>chip_lint.py</code> a zapiš do Logu, že by patřila do sdíleného modulu.</p>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests -v</code> projde, <strong>0 selhání a 0 expected failures</strong></li>
+<li>[x] <code>prekryv()</code> splňuje všechny případy z issues #1 a #2</li>
+<li>[x] <code>python tools/chip_lint.py</code> v repu vrací 0</li>
+<li>[x] pouze standardní knihovna (žádné nové závislosti)</li>
+<li>[x] hlášky a exit kódy lintu zůstávají jinak beze změny</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<p>Bez zelené brány se <strong>nemerguje</strong>. Když selže → stav <code>blocked</code>, popiš proč v Logu.</p>
+<pre><code class="language-bash">python -m unittest discover -s tests -v
+python tools/chip_lint.py
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, zapiš do Logu, nehádej.</strong></p>
+<ul>
+<li>změna <code>chip_common.py</code>, <code>chip_status.py</code>, <code>chip_run.py</code> (nárokuje si je chip 06)</li>
+<li>změna formátu briefu, frontmatteru nebo šablony</li>
+<li>nová závislost mimo stdlib</li>
+<li>oslabení brány: cokoli, co by chybu měnilo na varování</li>
+<li>soubor mimo sekci „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Nález N1 je detailně popsaný v <code>chips/01-testy-lint.md</code>, sekce Log — přečti si ho.</li>
+<li>Dnešní <code>prekryv()</code> volá <code>fnmatch(retezec, vzor)</code>, tedy druhý vzor bere doslova.<br />
+  Průnik dvou globů se dá rozhodnout rekurzivně: porovnávej znak po znaku, na <code>*</code><br />
+  zkoušej „spotřebuj nic" i „spotřebuj jeden znak z druhé strany", výsledky<br />
+  memoizuj (<code>functools.lru_cache</code> nebo slovník) — bez memoizace to u dlouhých<br />
+  cest exploduje.</li>
+<li>Rozbalení vzorů v <code>naroky()</code> řeší jen soubory, které <strong>už existují</strong> — proto<br />
+  N1 tiše projde u cest značených <code># nový</code> a u stavů <code>running</code>/<code>gated</code>.</li>
+<li>K N2: v git worktree je <code>.git</code> <strong>soubor</strong> (obsahuje <code>gitdir: …</code>), ne adresář —<br />
+  detekce musí projít oběma případy. Hledej nahoru od <code>chip.path</code>.</li>
+<li>Bias projektu je jasný: raději nahlásit kolizi navíc než ji přehlédnout.<br />
+  Ale ne za cenu, že se nahlásí i prokazatelně disjunktní vzory (issue #2).</li>
+<li>Konvence: komentáře a hlášky česky, dvě mezery odsazení, <code>X</code> chyba / <code>!</code> varování.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-07-26</td>
+<td>ready</td>
+<td>založeno orchestrátorem z nálezů vlny 1 (N1 z chipu 01, N2 z ověřování chipu 04)</td>
+</tr>
+<tr>
+<td>2026-07-26</td>
+<td>gated</td>
+<td>obojí opraveno v <code>tools/chip_lint.py</code>, testy rozšířeny na 67 metod (z 49). Brána zelená: <code>python -m unittest discover -s tests -v</code> → <code>Ran 187 tests … OK</code> (0 selhání, <strong>0 expected failures</strong>), <code>python tools/chip_lint.py</code> → <code>OK — 0 chyb, 0 varování</code>, exit 0.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="jak-je-to-vyresene">Jak je to vyřešené</h3>
+<p><strong>N1 — průnik dvou vzorů.</strong> <code>prekryv()</code> už neporovnává vzor s druhým vzorem jako<br />
+s doslovným řetězcem. Vzor se tokenizuje (<code>_tokeny</code>) na <code>HVEZDA</code> / <code>JEDEN</code> /<br />
+literál a <code>_prunik()</code> rekurzivně (s memoizací <code>(i, j)</code>, jinak exponenciální)<br />
+rozhodne, jestli existuje řetězec vyhovující oběma. <code>*</code> platí dál i přes <code>/</code><br />
+(zachováno z původního chování), třída <code>[…]</code> se bere konzervativně jako<br />
+„libovolný znak" — jazyk vzoru se tím jen rozšíří, takže kolize může vyjít<br />
+navíc, ale žádná nezmizí. <code>src/*.py</code> × <code>src/mo*</code> → kolize, <code>src/a_*.py</code> ×<br />
+<code>src/b_*.py</code> → čisto.</p>
+<p><strong>N2 — strom pro kontrolu existence.</strong> Nové lokální funkce <code>git_koren()</code><br />
+(hledá nahoru od briefu, <code>.git</code> bere jako adresář i jako soubor <code>gitdir: …</code>)<br />
+a <code>strom_ke_kontrole()</code>. Když brief leží uvnitř git stromu, kontroluje se ten;<br />
+mimo git se dál použije <code>repo:</code> z frontmatteru. <code>repo:</code> se <strong>validuje beze<br />
+změny</strong> (chybí / neexistuje = chyba), jen se podle něj už neověřuje existence<br />
+nároků — <code>chip_run.py</code> tak zakládá worktree pořád podle frontmatteru.<br />
+Stejný strom používá i <code>naroky()</code> při rozbalování vzorů, aby kolize nedokládal<br />
+souborem, který ve worktree není. Ověřeno i na tomhle repu: <code>repo:</code> =<br />
+<code>…/CHIPS</code>, strom kontroly = <code>…/CHIPS-chip-05</code>.</p>
+<h3 id="poznamky-naroky-na-jine-chipy">Poznámky / nároky na jiné chipy</h3>
+<ul>
+<li><code>git_koren()</code> a <code>strom_ke_kontrole()</code> jsou schválně jen v <code>chip_lint.py</code><br />
+  (issue #6). Kdyby je potřeboval i jiný nástroj, patřily by do <code>chip_common.py</code><br />
+  — to si ale nárokuje chip 06, takže <strong>návrh pro pozdější chip</strong>, ne teď.</li>
+<li>Hranice řešení N2: rozhoduje samotná přítomnost <code>.git</code> nad briefem, neověřuje<br />
+  se, že jde o tentýž repozitář jako <code>repo:</code>. Pro layout „chipy leží v repu,<br />
+  kterého se týkají" to sedí; kdyby někdo držel briefy v repu A a nárokoval<br />
+  soubory v repu B, kontrola by mířila do A. Rozhodnutí ponecháno tak, jak ho<br />
+  zadával brief (issue #4) — případné zpřísnění je nová věc, ne oprava.</li>
+<li>Brána nikde nezměkčena: žádná dosavadní chyba se nestala varováním, hlášky<br />
+  ani exit kódy se nezměnily (kontrolováno testy <code>TestExistenceCest</code>,<br />
+<code>TestNavratoveKody</code> a novými <code>test_*_zustava_chybou_i_uvnitr_gitu</code>).<br />
+| 2026-07-26 | merged | brána ověřena orchestrátorem (201 testů po integraci s chipem 06), sloučeno |<br />
+| 2026-07-27 | merged | Sjednocení složky: <code>vetev:</code> převedena na konvenci <code>ai/chip-NN/&lt;nazev&gt;</code> (zavedl chip 08 — tenhle chip běžel ještě pod starým tvarem <code>chip/NN-&lt;nazev&gt;</code>), doplněn slovník stavů do komentáře u <code>stav:</code>. Obsah chipu nedotčen. |</li>
+</ul>
+<div class="doc-foot">Vygenerováno z <code>05-oprava-brany.md</code> &middot; CHIP 05 — oprava dvou děr v bráně</div>
+</body>
+</html>
