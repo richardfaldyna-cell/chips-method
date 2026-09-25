@@ -1,55 +1,71 @@
 # CLAUDE.md — CHIPS
 
-Metodika + nástroje pro paralelní vývoj s AI agenty. Práce se krájí na uzavřené
-balíčky („chipy"), každý běží v izolovaném git worktree a merguje se až po
-projití automatické brány. Vznik a odůvodnění: `docs/konverzace-2026-07-25.md`.
+Methodology + tools for parallel development with AI agents. Work is sliced
+into self-contained packets ("chips"), each runs in an isolated git worktree
+and is merged only after passing an automated gate. Origin and rationale:
+`docs/konverzace-2026-07-25.md` (Czech).
 
-## Co tady platí
+**Language:** the tools' flags, messages, identifiers, the chip briefs and the
+pilot write-ups are in Czech and stay that way — tests assert on them and the
+briefs are a historical record. `README.md` and `docs/methodology.md` are
+English; `README.cs.md` and `docs/metodika.md` are their Czech originals. When
+a rule changes, change **both** language versions of the methodology.
 
-- **Metodika je v `docs/metodika.md`** — když se mění pravidlo, mění se tam,
-  ne v README ani v šabloně. README je jen rozcestník.
-- **`chips/TEMPLATE.md` je zdroj pravdy pro strukturu briefu.** Když se do něj
-  přidá sekce, přidej ji i do `POVINNE` v `tools/chip_lint.py` — jinak se
-  nekontroluje a časem vyhnije.
-- **Nástroje bez externích závislostí** kromě `markdown` (jen `md2html.py`).
-  Chip briefy parsuje vlastní mini-parser v `chip_common.py`, ne PyYAML.
-- **Ke každému `.md` patří `.html`** (konvence workspace):
-  `python tools/md2html.py --all`. Před commitem přegeneruj.
-- `chip_lint.py` vrací **exit 1 při nálezu** — je to brána, ne doporučení.
-  Nezaváděj do něj nic, co by se dalo „jen tak" ignorovat.
-- **Testy: `python -m unittest discover -s tests -v`**, stdlib `unittest`, žádný
-  pytest. Každý test si staví vlastní `tempfile` fixture a uklidí po sobě;
-  `chip_common.CHIPS_DIR` je globální stav, v `tearDown` ho vracej.
-  Nová funkce bez testu se sem nedostane — sada je jediné, co drží bránu poctivou.
+## What applies here
 
-## Když tenhle projekt řídíš jako orchestrátor
+- **The methodology lives in `docs/metodika.md`** (source of truth) and its
+  English translation `docs/methodology.md` — when a rule changes, it changes
+  there, not in the README or the template. The README is only a signpost.
+- **`chips/TEMPLATE.md` is the source of truth for the brief structure.** When
+  a section is added there, add it to `POVINNE` in `tools/chip_lint.py` too —
+  otherwise it isn't checked and rots over time.
+- **Tools have no external dependencies** except `markdown` (only
+  `md2html.py`). Chip briefs are parsed by the mini-parser in
+  `chip_common.py`, not PyYAML.
+- **Every `.md` has a `.html` next to it** (workspace convention):
+  `python tools/md2html.py --all`. Regenerate before committing.
+- `chip_lint.py` returns **exit 1 on a finding** — it is a gate, not advice.
+  Don't put anything in it that could be "just ignored".
+- **Tests: `python -m unittest discover -s tests -v`**, stdlib `unittest`, no
+  pytest. Every test builds its own `tempfile` fixture and cleans up after
+  itself; `chip_common.CHIPS_DIR` is global state, restore it in `tearDown`.
+  A new function without a test doesn't get in — the suite is the only thing
+  that keeps the gate honest.
+- Supported Python: 3.10+. Don't use APIs newer than that without a fallback
+  (e.g. `shutil.rmtree(onexc=…)` is 3.12+, see `chip_run.RMTREE_HANDLER`).
 
-- **Commitni před `chip_run.py`** — worktree se větví z HEAD, ne z working tree.
-- **Nesahej na brief běžícího chipu.** Je to soubor, který zároveň edituje agent
-  (Log, checkboxy) — přepis stavu dělej před spuštěním nebo až po merge
-  (`chip_common.prepis_stav`).
-- **Bránu ověř sám** (`chip_gate.py NN`), nezávisle na tom, co agent napsal
-  do souhrnu. PreToolUse hook ji spustí ještě jednou při merge — když ho
-  budeš chtít obejít, zastav se a zeptej se uživatele. Po každém
-  merge pusť celou sadu na hlavní větvi — zelená v izolaci není zelená dohromady.
-- Stav chipu přepínáš ty, ne agent. Mandát chipu je Log a checkboxy.
+## When you run this project as the orchestrator
 
-## Čeho se držet obsahově
+- **Commit before `chip_run.py`** — the worktree branches from HEAD, not from
+  the working tree.
+- **Don't touch the brief of a running chip.** It is a file the agent edits at
+  the same time (Log, checkboxes) — rewrite the state before launch or only
+  after the merge (`chip_common.prepis_stav`).
+- **Verify the gate yourself** (`chip_gate.py NN`), independently of what the
+  agent wrote in its summary. The PreToolUse hook runs it once more at merge —
+  if you want to bypass it, stop and ask the user. After every merge run the
+  whole suite on the main branch — green in isolation is not green together.
+- You switch the chip's state, not the agent. The chip's mandate is the Log
+  and the checkboxes.
 
-Projekt existuje kvůli třem konkrétním selháním paralelního vývoje. Když se
-přidává funkce, musí sloužit aspoň jednomu z nich:
+## What to stick to content-wise
 
-1. N session nad jedním working tree → tiše ztracené změny (→ worktree)
-2. autonomní merge bez ověření → „zkontroloval jsem to" jako tvrzení modelu (→ brána)
-3. nejasné hranice mezi balíčky → kolize (→ disjunktnost + `chip_lint.py`)
+The project exists because of three specific failures of parallel development.
+When a feature is added, it must serve at least one of them:
 
-Naopak sem **nepatří**: hlasování více modelů jako náhrada rozhodnutí,
-automatický merge bez brány, měkká formulace pravidel typu „buď opatrný".
+1. N sessions over one working tree → silently lost changes (→ worktree)
+2. autonomous merge without verification → "I checked it" as the model's own
+   claim (→ gate)
+3. unclear boundaries between packets → collisions (→ disjointness +
+   `chip_lint.py`)
 
-## Git / bezpečnost
+What does **not** belong here: multi-model voting as a substitute for a
+decision, automatic merge without a gate, soft rule wording like "be careful".
 
-- **Push jen na vlastní větev a přes PR**, nikdy rovnou do `master`.
-- **Repo je veřejné.** Do briefů, logů, dokumentace ani commitů nepatří
-  absolutní lokální cesty (`repo:` piš relativně k adresáři s briefy, typicky
-  `..`), názvy firemních repů ani secrets. Cizí projekt popiš obecně
-  („firemní ERP projekt"), ne jménem.
+## Git / security
+
+- **Push only to your own branch and via PR**, never straight to `master`.
+- **The repo is public.** Briefs, logs, docs and commits must not contain
+  absolute local paths (write `repo:` relative to the briefs directory,
+  typically `..`), names of company repos, or secrets. Describe a third-party
+  project generically ("a company ERP project"), not by name.

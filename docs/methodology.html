@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The CHIPS methodology</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="the-chips-methodology">The CHIPS methodology</h1>
+<p>A procedure for parallel development with AI agents. The goal is not speed —<br />
+the goal is that parallelisation <strong>does not lower quality</strong> compared to serial<br />
+work.</p>
+<blockquote>
+<p>This is the English translation of <a href="metodika.md">metodika.md</a>, which is the<br />
+source of truth. Tool flags, brief section names and file names are kept in<br />
+their original Czech form and glossed on first use; the README has a full<br />
+glossary.</p>
+</blockquote>
+<hr />
+<h2 id="1-vocabulary">1. Vocabulary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>chip</strong></td>
+<td>a self-contained packet of work: a list of issues + boundaries + definition of done</td>
+</tr>
+<tr>
+<td><strong>window</strong></td>
+<td>a separate Claude Code session with its own context and limits</td>
+</tr>
+<tr>
+<td><strong>orchestrator</strong></td>
+<td>the main loop in a window; hands work to subagents and merges</td>
+</tr>
+<tr>
+<td><strong>subagent</strong></td>
+<td>a secondary instance with an isolated context (Agent tool)</td>
+</tr>
+<tr>
+<td><strong>gate</strong></td>
+<td>an automated check without which nothing may be merged</td>
+</tr>
+<tr>
+<td><strong>T3</strong></td>
+<td>a decision a chip must not make on its own (see §6)</td>
+</tr>
+</tbody>
+</table>
+<p>Mind the layers — they get confused:</p>
+<pre><code>you  ──►  chip brief  ──►  window (orchestrator)  ──►  subagents  ──►  gate  ──►  merge
+          file             session                   Agent tool      tests
+</code></pre>
+<hr />
+<h2 id="2-slicing-work-into-chips">2. Slicing work into chips</h2>
+<p><strong>The only criterion is file disjointness.</strong> Not the age of the issues, not<br />
+priority, not topic. Two chips that touch the same file will collide — no<br />
+matter how well they are described.</p>
+<p>Procedure:</p>
+<ol>
+<li><strong>List the issues</strong> and for each one estimate which files it will change.<br />
+   For unclear ones find out (grep, read the issue) — guessing doesn't pay here.</li>
+<li><strong>Group by files</strong>, not by topic. Issues touching the same module belong in<br />
+   one chip even if they are thematically unrelated.</li>
+<li><strong>Verify disjointness</strong> — <code>python tools/chip_lint.py</code> walks all briefs and<br />
+   reports any file claimed by two chips.</li>
+<li><strong>What can't be sliced, do serially.</strong> When three quarters of the issues<br />
+   fight over one central file, parallelisation won't help you. Make that file<br />
+   chip #1 and start the others only after its merge.</li>
+</ol>
+<h3 id="how-to-write-a-file-claim">How to write a file claim</h3>
+<p>Paths in the "Dotčené soubory" (files touched) section are <strong>relative to<br />
+<code>repo:</code></strong> from the frontmatter. An absolute path or <code>..</code> is an error — the<br />
+claim can then not be compared with other chips.</p>
+<table>
+<thead>
+<tr>
+<th>Notation</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/parser.py</code></td>
+<td>a specific file, must exist in the repo</td>
+</tr>
+<tr>
+<td><code>src/</code></td>
+<td>the whole directory including its subtree</td>
+</tr>
+<tr>
+<td><code>src/report_*.py</code></td>
+<td>a pattern; expanded to real files for collision checking</td>
+</tr>
+<tr>
+<td><code>src/new.py  # nový</code></td>
+<td>a file the chip will create — the existence check is skipped</td>
+</tr>
+</tbody>
+</table>
+<p>In the <code>ready</code> state lint verifies that the claimed paths <strong>really exist</strong> in<br />
+the repo. A claim on a non-existent file is either a typo or a stale brief —<br />
+and in both cases the chip's slice is built on something that isn't there. The<br />
+<code># nový</code> (new) marker is the only exception and is deliberately explicit: you<br />
+have to write it, not rely on it.</p>
+<blockquote>
+<p>A pattern also covers files that don't exist yet. <code>src/*.py</code> in one chip<br />
+therefore collides with <code>src/new.py  # nový</code> in another, even though that file<br />
+doesn't exist yet.</p>
+</blockquote>
+<h3 id="dependencies-and-waves">Dependencies and waves</h3>
+<p>File disjointness is not enough when one chip builds the foundation the others<br />
+need before they can start (the skeleton of a repo, lookup tables that<br />
+migrations reference). That is what <code>zavisi_na:</code> (depends on) in the frontmatter<br />
+is for — a list of chips that must be <code>merged</code> first.</p>
+<p>Chips with the same dependency depth form a <strong>wave</strong> and run in parallel:</p>
+<pre><code>wave 0:  00                    ← serial, blocks everything
+wave 1:  01                    ← foundation for the migrations
+wave 2:  02  03  04  07  09    ← in parallel, independent
+wave 3:  05  06  08  10        ← build on wave 2
+</code></pre>
+<p><code>chip_lint.py</code> checks that a dependency exists, is not cyclic, and that a<br />
+running chip has its ancestors in the <code>merged</code> state. <strong>The width of a wave, not<br />
+the number of chips, determines how many windows it makes sense to open</strong> — ten<br />
+chips in four waves means at most five windows at once.</p>
+<h3 id="chip-ceiling">Chip ceiling</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Recommendation</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>issues</td>
+<td>10–20</td>
+<td>more won't fit into one context</td>
+</tr>
+<tr>
+<td>files touched</td>
+<td>~15</td>
+<td>above that the chance of a collision with another chip grows</td>
+</tr>
+<tr>
+<td>run time</td>
+<td>a few hours</td>
+<td>a longer run = a bigger loss on failure</td>
+</tr>
+<tr>
+<td><strong>independent fixes with proof</strong></td>
+<td><strong>~2–3</strong></td>
+<td>four hit the ceiling of a single response</td>
+</tr>
+</tbody>
+</table>
+<p>When the ceiling doesn't fit, slice the chip. Two smaller chips are always<br />
+better than one that doesn't finish.</p>
+<p><strong>Besides consumption there is a second limit: assignment density.</strong><br />
+Consumption (~100k tokens per chip) watches itself and shows up as a warning.<br />
+Density doesn't — a chip with four independent fixes, each with a regression<br />
+proof, hits the limit of <strong>one response</strong> and dies without warning in the<br />
+middle of the work (chip 10, wave 4).</p>
+<p><strong>Slice by the nature of the work, not by the number of issues.</strong> Chip 10 was<br />
+split into "where the tool takes its input from" (parsing) and "when it should<br />
+reject" (decision rules) — not into "the first two findings" and "the other<br />
+two". Mechanical splitting forces the agent to switch between two modes of<br />
+reasoning inside one chip, which is exactly the density the slicing is meant to<br />
+avoid.</p>
+<p><strong>Beware of naming sliced chips.</strong> The expected choice <code>10a</code>/<code>10b</code> would break<br />
+the gate here: both the hook and <code>chip_gate</code> match the chip number as <code>(\d+)</code>,<br />
+so branch <code>ai/chip-10a/…</code> is recognised as <strong>chip 10</strong> and someone else's brief<br />
+gets verified. New numbers at the end of the sequence are safer — naming adapts<br />
+to the tool, because the tool is the enforcement point.</p>
+<hr />
+<h2 id="3-isolation-a-worktree-not-a-folder">3. Isolation: a worktree, not a folder</h2>
+<p>The most common mistake is to run N sessions over the same working tree. The<br />
+result isn't git conflicts (you'd at least see those) but <strong>silently lost<br />
+changes</strong> — two sessions read a file, both write it, the second write wipes out<br />
+the first.</p>
+<p>The fix is <code>git worktree</code>: one repository, N independent checkouts.</p>
+<pre><code class="language-bash">git worktree add ../repo-chip-01 -b ai/chip-01/parser-refactor
+</code></pre>
+<p>Every window works in its own folder, on its own branch, with its own index.<br />
+Merging happens at the end and git handles any conflict normally and visibly.</p>
+<p>Claude Code has <code>EnterWorktree</code> for this (for a session) and subagents take the<br />
+<code>isolation: "worktree"</code> parameter. <code>tools/chip_run.py</code> does it for you.</p>
+<p><strong>A dependent chip branches from its predecessor, not from HEAD.</strong> When chip B<br />
+builds on the work of chip A that isn't merged yet, branching from HEAD would<br />
+take away exactly what it is supposed to build on:</p>
+<pre><code class="language-bash">python tools/chip_run.py 02 --od ai/chip-01/base    # --od = --from
+</code></pre>
+<p>The agent of such a chip gets an extra sentence in its assignment: someone<br />
+else's unfinished code lies under its work — <strong>it neither edits nor fixes it</strong>;<br />
+a finding in it belongs in the Log. Without that it would treat the<br />
+predecessor's unfinished code as part of the main branch and "repair" it,<br />
+producing exactly the collision between packets that chips exist to prevent.<br />
+Lint lets a dependent pair through and only reminds you of the merge order — a<br />
+<code>gated</code> ancestor is a warning, a <code>blocked</code> or unfinished ancestor remains an<br />
+error.</p>
+<p><strong>Greenfield: the first chip in a project that doesn't exist yet.</strong> A freshly<br />
+<code>init</code>ed repo has no <code>HEAD</code> for <code>worktree add</code> to branch from, and lint fails<br />
+on the non-existent repo and on the claimed paths. Both are solved by an<br />
+explicit declaration, not a softer default:</p>
+<pre><code class="language-yaml">greenfield: ano      # in the brief's frontmatter — the repo is yet to be created
+</code></pre>
+<pre><code class="language-bash">python tools/chip_run.py 01 --zaloz-repo    # git init + empty root commit
+</code></pre>
+<p>Over a repo that already has history <code>--zaloz-repo</code> <strong>does nothing</strong> and says<br />
+so; <code>greenfield: ano</code> is reported there as a stale flag to delete. The check of<br />
+the path <em>shape</em> (relative, no <code>..</code>) is never switched off, flag or not — it is<br />
+the input to the disjointness comparison, so softening it would mean softening<br />
+disjointness.</p>
+<blockquote>
+<p><strong>Cleanup:</strong> <code>python tools/chip_run.py 01 --uklid</code> — <strong>only after the<br />
+merge</strong>, otherwise you accumulate dozens of dead checkouts. The tool refuses to<br />
+clean up an unmerged branch (see below); consciously abandoning a chip is<br />
+<code>--uklid --presto</code> (cleanup, force).</p>
+</blockquote>
+<p>A worktree isn't just a working folder, it is <strong>the only place where a chip's<br />
+gate can run</strong>. That's why the tools treat it as a tree owned by somebody else<br />
+in each phase:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Who writes into the worktree</th>
+<th>What must NOT touch the main tree</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>before launch</td>
+<td><code>chip_run.py</code> (creates it, rewrites <code>stav:</code>)</td>
+<td>nothing — the main tree stays clean</td>
+</tr>
+<tr>
+<td>chip running</td>
+<td>the agent (code, Log, checkboxes)</td>
+<td>the agent doesn't touch the main tree at all</td>
+</tr>
+<tr>
+<td>merge</td>
+<td>git</td>
+<td>—</td>
+</tr>
+<tr>
+<td>after merge</td>
+<td><code>chip_run.py --uklid</code> (deletes it)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>From this also follows <strong>which copy of the brief <code>--stav</code> may rewrite</strong>: the one<br />
+in the worktree, not in the main tree. The brief is a versioned file, so the<br />
+worktree has its own copy — and writing into the main tree would leave an<br />
+uncommitted change there in a file the merge rewrites. <code>git merge</code> refuses such<br />
+a merge (<code>Your local changes … would be overwritten</code>). The rule "don't touch<br />
+the brief of a running chip" applies to tools too, not just to people.</p>
+<hr />
+<h2 id="4-the-gate-where-quality-is-decided">4. The gate: where quality is decided</h2>
+<p>The sentence "be thorough and check everything carefully" has no enforcement<br />
+power. It is a wish. Only something that <strong>fails on its own</strong> when something is<br />
+wrong has power.</p>
+<p>Gate = a sequence of commands that must pass, otherwise nothing is merged:</p>
+<pre><code class="language-bash">pytest -q                    # tests
+python -m build              # build
+python smoke_test.py         # smoke test against real data
+</code></pre>
+<p>Three levels of enforcement, weakest to strongest:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Mechanism</th>
+<th>Can it be bypassed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>instruction in the prompt</td>
+<td>"check it"</td>
+<td>yes, even unintentionally</td>
+</tr>
+<tr>
+<td>skill (<code>/chip</code>, <code>/ship</code>)</td>
+<td>a procedure the agent loads</td>
+<td>yes, when it doesn't call it</td>
+</tr>
+<tr>
+<td><strong>hook</strong></td>
+<td>the harness runs it itself before the merge</td>
+<td><strong>no</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The third level has been in place since 2026-07-26: <code>tools/hook_chip_gate.py</code><br />
+hangs on PreToolUse and <strong>rejects <code>git merge</code> of a chip branch until the gate<br />
+is green</strong>. It has no command list of its own — it takes the "Ověření (brána)"<br />
+(verification / gate) section from the brief of the chip whose branch is being<br />
+merged. So it enforces exactly what the chip promised itself, and works in any<br />
+repo.</p>
+<p>To stay out of the way elsewhere its scope is narrow — the hook speaks up only<br />
+when everything holds: the command runs <code>git merge</code>, the merged branch is<br />
+<code>ai/chip-NN/...</code> (or the older <code>chip/NN-...</code>), and chip briefs can be found for<br />
+the target repo. Otherwise it silently lets the command through.</p>
+<p><strong>Briefs don't have to live in the repo.</strong> As long as the <code>chips/</code> directory<br />
+was the only signal, two things that shouldn't be mutually exclusive were: a<br />
+hard gate and zero footprint in a third-party repo. Whoever kept the briefs<br />
+elsewhere (<code>--dir</code>, typically a client repo) got a hook that <strong>silently let red<br />
+merges through</strong> — and the gate looked like it worked. So there are three<br />
+signals, from the most specific to the most general:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>When it applies</th>
+<th>What it's for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chips/</code> in the repo</td>
+<td>the directory exists</td>
+<td>the default case, your own projects</td>
+</tr>
+<tr>
+<td><code>.chips</code> marker</td>
+<td>the file exists; its first non-empty line is the path to the briefs</td>
+<td>a repo where the method must leave no trace</td>
+</tr>
+<tr>
+<td>env <code>CHIPS_DIR</code></td>
+<td>points to the briefs of <strong>this</strong> repo (<code>repo:</code>)</td>
+<td>a session over one project</td>
+</tr>
+</tbody>
+</table>
+<p>The marker just has to stay untracked (<code>.git/info/exclude</code>) — one dotfile is a<br />
+footprint you can live with even in a third-party repo; a directory with a dozen<br />
+briefs isn't. And because nobody creates the marker by accident, <strong>a broken<br />
+marker rejects</strong> instead of staying silent: a typo in the path would otherwise<br />
+switch off the gate exactly where the user explicitly wanted it.</p>
+<p>With <code>CHIPS_DIR</code> it is the other way round — it is a global variable, not a<br />
+registration of a specific repo. It is accepted only when it contains a brief<br />
+that claims this repo; otherwise a variable set for project A would decide<br />
+merges in project B.</p>
+<p><strong>The branch is taken from the argument after <code>merge</code>, not from anywhere in the<br />
+command.</strong> A compound command <code>git branch -d ai/chip-04/x &amp;&amp; git merge
+ai/chip-05/y</code> would otherwise verify the gate of chip 04 and let the merge of<br />
+chip 05 through. The same holds for <code>git -C</code> — only the one belonging to the<br />
+merge itself is taken. For an octopus merge (<code>git merge A B</code>) the gate of<br />
+<strong>every</strong> branch must pass.</p>
+<p><strong>When there is nowhere to verify the gate, the hook rejects</strong> — it doesn't<br />
+verify a substitute tree:</p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Why reject</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the chip's worktree doesn't exist</td>
+<td>a gate in the main tree would verify code <strong>without the chip's changes</strong> and return a false green</td>
+</tr>
+<tr>
+<td>there are uncommitted changes in the worktree</td>
+<td>the merge takes the committed tip, so the gate would measure a different state than the one being merged</td>
+</tr>
+<tr>
+<td>the state of the worktree can't be determined</td>
+<td>not knowing what is in the tree is, for the gate's purposes, the same as not having it</td>
+</tr>
+</tbody>
+</table>
+<p>Practical consequence: <strong>worktree cleanup belongs after the merge.</strong> Whoever<br />
+cleans up earlier doesn't merge — and the only way out is to bypass your own<br />
+gate. That's why it isn't just advice: <code>chip_run.py NN --uklid</code> <strong>refuses</strong> to<br />
+clean up an unmerged branch (<code>merge-base --is-ancestor</code>, so a fast-forward<br />
+passes too). An abandoned chip is cleaned up consciously via <code>--uklid --presto</code>.</p>
+<p>You run the same gate by hand with <code>python tools/chip_gate.py NN</code> — <strong>also in<br />
+the chip's worktree</strong>, not in the main tree. Until 2026-07-28 the CLI did the<br />
+opposite, silently: the gate of chip 18 reported green over the main tree with<br />
+454 tests, while the worktree had 481. The 27-test difference was exactly the<br />
+work the gate was supposed to decide on. When <code>worktree:</code> is missing or empty,<br />
+the tool now <strong>fails</strong> — the silent fallback to the main tree was the whole<br />
+defect.</p>
+<p><strong>While a wave runs, <code>chip_status.py</code> lies to you.</strong> It reads the briefs in the<br />
+main tree, where nothing moves while a chip runs — checkboxes and files change<br />
+in the worktree. The live state comes from <code>python tools/chip_dashboard.py</code>: it<br />
+reads from every chip's worktree and from git, i.e. from hard sources, not from<br />
+what the agent wrote in its summary. In wave 6 the difference was 37 ticked<br />
+issues and five states.</p>
+<p><strong>When the gate fails, the chip doesn't end in a merge but in an open PR.</strong><br />
+That is the whole difference between "autonomous" and "unsupervised".</p>
+<hr />
+<h2 id="5-definition-of-done">5. Definition of done</h2>
+<p>It must be verifiable by a command, not by an opinion. The test:</p>
+<table>
+<thead>
+<tr>
+<th>❌ not measurable</th>
+<th>✅ measurable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"the parser is refactored"</td>
+<td>"<code>pytest tests/test_parser.py</code> passes, <code>parser.py</code> &lt; 300 lines"</td>
+</tr>
+<tr>
+<td>"the code is cleaner"</td>
+<td>"<code>ruff check</code> reports nothing"</td>
+</tr>
+<tr>
+<td>"it works"</td>
+<td>"the smoke test on <code>data/sample.xlsx</code> returns 42 rows"</td>
+</tr>
+</tbody>
+</table>
+<p>When the DoD can't be written as a command, the chip isn't ready to launch yet.</p>
+<h3 id="measurable-strong">Measurable ≠ strong</h3>
+<p>A command is a necessary condition, not a sufficient one. <strong>A DoD of the form<br />
+"the tool returns 0 errors" is weak if it doesn't prove that the check ran at<br />
+all.</strong> Chip 11 had "lint over the ERP briefs returns 0 errors" in its DoD; it<br />
+returned 0 before the fix too, because all 11 briefs were in the <code>draft</code> state<br />
+and the path check doesn't run on those. The agent discovered this itself and<br />
+replaced it with a direct measurement of the fixed function's return value.</p>
+<p>The strength test: <strong>would this DoD pass on the broken version too?</strong> If yes, it<br />
+measures the presence of a tool, not behaviour. A strong DoD compares <strong>a<br />
+specific value before and after</strong>, not an exit code.</p>
+<hr />
+<h2 id="6-escalation-what-a-chip-must-not-decide-on-its-own">6. Escalation — what a chip must not decide on its own</h2>
+<p>Mark up front what is <strong>T3</strong> (critical). Typically:</p>
+<ul>
+<li>a change to a public API or a data format</li>
+<li>a schema migration / an irreversible operation on data</li>
+<li>anything in <code>patients/</code> (sensitive data) and in company projects</li>
+<li>a new dependency, a licence change</li>
+<li>a security decision</li>
+</ul>
+<p>When a chip hits T3, <strong>it stops and opens a PR with a question</strong>. It doesn't<br />
+guess, it doesn't vote.</p>
+<h3 id="why-not-let-it-consult-another-model">Why not "let it consult another model"</h3>
+<p>It's tempting: when unsure, let Codex/Gemini/Grok decide and carry on. It<br />
+doesn't work, because:</p>
+<ul>
+<li>those models <strong>don't see your repo, its history or earlier decisions</strong>;</li>
+<li>agreement of three models isn't truth, it's the average of three guesses;</li>
+<li>the result then gets merged <strong>without your knowledge</strong> — the uncertainty<br />
+  vanished from the log.</li>
+</ul>
+<p>The second opinion in code is <strong>tests and the build</strong>, not another model.<br />
+Cross-model consultation makes sense for the <em>design</em> (before writing starts),<br />
+not as a substitute for your decision.</p>
+<hr />
+<h2 id="7-chip-lifecycle">7. Chip lifecycle</h2>
+<pre><code>draft ──► ready ──► running ──► gated ──┬─► merged
+                                        └─► blocked (PR + question)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>draft</code></td>
+<td>the brief is being written, boundaries aren't certain yet</td>
+</tr>
+<tr>
+<td><code>ready</code></td>
+<td>brief filled in, <code>chip_lint.py</code> clean → may be launched</td>
+</tr>
+<tr>
+<td><code>running</code></td>
+<td>running in a worktree</td>
+</tr>
+<tr>
+<td><code>gated</code></td>
+<td>work finished, waiting for the gate</td>
+</tr>
+<tr>
+<td><code>merged</code></td>
+<td>gate green, merged, worktree cleaned up</td>
+</tr>
+<tr>
+<td><code>blocked</code></td>
+<td>hit T3 or the gate failed → waiting for you</td>
+</tr>
+</tbody>
+</table>
+<p>Keep the state in the brief's header (<code>chips/NN-*.md</code>, field <code>stav:</code>), not in<br />
+your head.</p>
+<hr />
+<h2 id="8-recommended-ramp-up">8. Recommended ramp-up</h2>
+<ol>
+<li><strong>One chip entirely by hand</strong>, so you know what good output looks like and<br />
+   how much it costs.</li>
+<li><strong>Three chips in parallel</strong> — this is where it shows whether the slice fits<br />
+   and where it grinds.</li>
+<li><strong>Only then ten.</strong> Ten windows at max effort plus subagents is enormous<br />
+   consumption; you'll hit the limits before the results.</li>
+</ol>
+<p>Between steps always evaluate: how many chips ended <code>blocked</code>, how many times<br />
+the gate caught an error, how many times you had to step in. When there are<br />
+many interventions, the fault is almost always in the <strong>slice</strong> (chips stepping<br />
+on each other) or in the <strong>DoD</strong> (it wasn't measurable) — not in the model.</p>
+<hr />
+<h2 id="9-what-the-pilot-showed-2026-07-26">9. What the pilot showed (2026-07-26)</h2>
+<p>The first live run: six chips in two waves over this repo, each in its own<br />
+worktree with its own window. Result: 6/6 merged, zero <code>blocked</code>, zero edits<br />
+outside the claimed files, zero merge conflicts, 0 → 201 tests.</p>
+<p><strong>What worked as designed</strong></p>
+<ul>
+<li><strong>Slicing by files holds.</strong> Not one of the six agents reached outside its<br />
+  claim, although they had the opportunity (they lacked functions they had to<br />
+  write locally). Instead they wrote it in the Log — five findings went<br />
+  upstream.</li>
+<li><strong>Escalation instead of guessing.</strong> All six independently refused to switch<br />
+<code>stav:</code> in the frontmatter: a chip's mandate is the Log and the checkboxes,<br />
+  the state is the orchestrator's decision.</li>
+<li><strong><code>expectedFailure</code> as a channel for findings.</strong> A chip that found a bug in<br />
+  code outside its claim didn't fix it — it pinned it with a test marked<br />
+<code>@unittest.expectedFailure</code> and sent it upstream. The bug thereby survived the<br />
+  merge <strong>visibly</strong>, and the fixing chip had to un-mark it, otherwise the suite<br />
+  would fail on <code>unexpected success</code>.</li>
+</ul>
+<p><strong>What had to be added</strong></p>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Consequence for the method</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The brief is a file shared by the orchestrator and the chip</td>
+<td>The orchestrator <strong>must not</strong> edit the brief of a running chip. Switch the state before launch or after the merge.</td>
+</tr>
+<tr>
+<td><code>git worktree add</code> branches from HEAD, not from the working tree</td>
+<td>Commit work in progress <strong>before</strong> creating the worktree, otherwise the chip gets old code.</td>
+</tr>
+<tr>
+<td>Lint checked claims against the main tree, not the worktree</td>
+<td>Path existence must be verified where the chip really works.</td>
+</tr>
+<tr>
+<td>File disjointness ≠ disjointness of consequences</td>
+<td>A chip may own a shared base (<code>chip_common.py</code>) but not rename things in it. A boundary the path list can't express, write in words in the Escalation section.</td>
+</tr>
+<tr>
+<td>Green in isolation ≠ green together</td>
+<td>After <strong>every</strong> merge run the whole suite on the main branch, not just the chip's gate.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Consumption.</strong> One chip = roughly 80–110k tokens (6 chips ≈ 550k). That is<br />
+a hard ceiling on wave width: ten chips at once is half a million tokens in one<br />
+wave, before you verify anything.</p>
+<h3 id="second-pilot-a-third-party-repo-and-the-reviewer-role-2026-07-26">Second pilot: a third-party repo and the reviewer role (2026-07-26)</h3>
+<p>Seven chips over a live company repo (0 → 235 tests). It brought two things<br />
+the first pilot couldn't show.</p>
+<p><strong>A reviewer is to the gate what a worktree is to isolation.</strong> The gate is only<br />
+as strict as the tests — and those are written by the same model that wrote the<br />
+code. So we deployed <strong>an independent agent that didn't write the code</strong>, with a<br />
+single mandate: report, don't fix. Its method is <strong>mutation testing</strong> — break<br />
+the code and measure how many mutations the suite kills. Result: in chip 05 it<br />
+found two substantive gaps, in chip 06 a silent failure (<code>exit 0</code> even though<br />
+not a single file could be read) and three unlocked boundaries. The gate caught<br />
+none of it, because everything was consistent <em>inside</em> the author's reasoning.</p>
+<p>The <code>chip_review.py</code> tool does the mechanical part (the scope of changes<br />
+against the claim, tests without asserts, the DoD against the gate commands) and<br />
+<code>--zadani</code> (assignment) prints the brief for the agent. <strong>It gives no verdict</strong> —<br />
+it collects material.</p>
+<p><strong>Where to stop.</strong> The chain chip → review → chip → review → chip is serial by<br />
+nature and took over an hour. Each layer found something new, but the yield<br />
+falls: the third chip was already half just locking in correct behaviour. It is<br />
+cheaper to <strong>bundle the review findings into one chip</strong> than to handle them one<br />
+by one.</p>
+<p><strong>Dependent chips went unaddressed for a long time.</strong> A chip that builds on an<br />
+unmerged predecessor has to branch from its branch — <code>chip_run.py</code> could only<br />
+branch from HEAD, so the worktree was created by hand, and <code>chip_lint</code> reported<br />
+the unmet dependency as an error. Solved in wave 5 (2026-07-28): <code>chip_run.py
+--od &lt;ref&gt;</code> and the distinction of ancestor states in lint, see §3. Merging the<br />
+descendant still brings the predecessor's work too — that's a property, not a<br />
+defect, and that's why merging happens in order.</p>
+<p><strong><code>chip_run.py --stav</code> violated its own rule.</strong> It rewrote <code>stav:</code> in the brief<br />
+in the main tree while the agent edited the same file in the worktree → the<br />
+merge ended in a conflict. The rule "don't touch the brief of a running chip"<br />
+must apply to tools too, not just to people. Fixed 2026-07-28: the write goes to<br />
+the copy in the worktree, the main tree stays clean (§3).</p>
+<p><strong>Limits of the pilot.</strong> CHIPS on itself is a favourable case — a small repo,<br />
+clean Python, no external dependencies, issues written by the same person who<br />
+sliced them. Before you trust it on a big repo, repeat it on someone else's<br />
+code.</p>
+<h3 id="wave-4-what-survives-an-interruption-2026-07-27">Wave 4: what survives an interruption (2026-07-27)</h3>
+<p>The wave fixed 10 findings from an external code review. All three agents died<br />
+in the middle of the work on account limits — <strong>not on the code</strong>. After the<br />
+reset it was completed in full: 10/10 findings, 366 → 413 tests, 4/4 green<br />
+gate.</p>
+<p><strong>Isolation held even through a triple crash.</strong> The main tree stayed clean and<br />
+untouched; the work of two agents was in git on their branches and could be<br />
+finished. The chip that hadn't started was simply re-sliced and launched again.</p>
+<p><strong>Before you put an agent on a "half-done" chip, read the diff — not the note<br />
+about it.</strong> The rescue note claimed nobody knew what was done in chip 12; in<br />
+fact it was completely finished including the Log and the ticked DoD. Chip 11<br />
+had all four fixes coded and covered by 13 tests. Had I trusted the note, the<br />
+agents would have rewritten finished work.</p>
+<p><strong>A chip sees things the assignment doesn't know.</strong> The agent of chip 13,<br />
+while fixing "take the branch from the argument after <code>merge</code>", discovered a<br />
+finding the code review had missed: an octopus merge (<code>git merge A B</code>) verified<br />
+the gate of the first branch only and let the second one through unchecked. It<br />
+followed from the fix — once branches are taken from the arguments, it's<br />
+visible that there can be several. <strong>A good assignment opens a view, it<br />
+doesn't just delimit work.</strong></p>
+<p><strong>Worktree cleanup belongs after the merge.</strong> Since chip 14 the hook rejects a<br />
+merge when the chip's worktree is missing — there is nowhere to verify the<br />
+gate. Whoever cleans up earlier doesn't merge. Since 2026-07-28 <code>--uklid</code> itself<br />
+guards this too: it refuses to clean up an unmerged branch.</p>
+<p><strong>A rule that holds only in documentation gets broken by a tool.</strong> All three<br />
+fixes of 2026-07-28 (the cleanup order, the target of the <code>--stav</code> write, the<br />
+brief lookup) had the same shape: the rule was written correctly in the<br />
+methodology and the tool violated it. When a rule appears in the project, ask<br />
+straight away <strong>which code can violate it</strong> — not just who should read it.</p>
+<p>Wave 6 added three more cases of the same pattern: a gate run by hand measured<br />
+the main tree, <code>chip_status.py</code> showed dead data about running chips, and the<br />
+reviewer reported as a finding something that is the normal state. <strong>The most<br />
+common form of this defect is "the tool reads the main tree, but the truth is in<br />
+the worktree".</strong> It appeared four times in one day in four different files.</p>
+<h3 id="a-false-signal-is-a-defect-even-when-it-is-true">A false signal is a defect even when it is true</h3>
+<p>A tool that reports noise trains a reader who skips it — and that reader then<br />
+misses the report that is genuine. Chip 15 dealt with this for placeholders in<br />
+lint, chip 21 for the reviewer. Both ended the same way: <strong>the solution isn't<br />
+to mute the message but to narrow it to the cases where it really hurts</strong>, or<br />
+to rephrase it as what it really is.</p>
+<p>Hence a dividing rule worth keeping in every tool of the project:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>means</th>
+<th>belongs where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>finding</strong></td>
+<td>"this is wrong"</td>
+<td>the tool has complete data and can decide</td>
+</tr>
+<tr>
+<td><strong>question</strong></td>
+<td>"verify this yourself"</td>
+<td>the tool has nothing to decide with, but knows where to look</td>
+</tr>
+<tr>
+<td><strong>data</strong></td>
+<td>an inventory</td>
+<td>neither — it is material, not a verdict</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-antipatterns">10. Antipatterns</h2>
+<table>
+<thead>
+<tr>
+<th>Antipattern</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>N windows over one working tree</td>
+<td>silently lost changes</td>
+</tr>
+<tr>
+<td>"be autonomous and thorough" without a gate</td>
+<td>the model confirms to itself that it checked</td>
+</tr>
+<tr>
+<td>slicing by topic instead of by files</td>
+<td>collisions, the last merge wins</td>
+</tr>
+<tr>
+<td>model voting instead of escalation</td>
+<td>the uncertainty vanishes from the log, nobody knows about it</td>
+</tr>
+<tr>
+<td>a chip without a measurable DoD</td>
+<td>"done" can't be verified, you have to read everything</td>
+</tr>
+<tr>
+<td>ten chips straight away without a pilot</td>
+<td>you hit the limits and don't know why</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>methodology.md</code> &middot; The CHIPS methodology</div>
+</body>
+</html>

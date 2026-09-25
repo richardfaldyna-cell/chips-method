@@ -54,200 +54,312 @@ strong { color: #10222e; }
 </head>
 <body>
 <h1 id="chips">CHIPS</h1>
-<p><strong>Metodika paralelního vývoje s AI agenty.</strong> Práci nakrájíš na uzavřené balíčky<br />
-(„chipy"), každý dostane vlastní izolované okno, odpracuje se autonomně a smí se<br />
-sloučit teprve po projití automatické brány.</p>
+<p><strong>A methodology for parallel development with AI agents.</strong> You slice the work<br />
+into self-contained packets ("chips"), each one gets its own isolated window,<br />
+runs autonomously, and may be merged only after it passes an automated gate.</p>
 <blockquote>
 <p><strong>CHIP</strong> = <strong>C</strong>ontained <strong>H</strong>ands-off <strong>I</strong>ssue <strong>P</strong>acket<br />
-(backronym vymyšlený v tomhle projektu — mimo něj to slovo nikdo nezná, viz<br />
-<a href="docs/konverzace-2026-07-25.md">docs/konverzace-2026-07-25.md</a>)</p>
+(a backronym coined in this project — nobody outside it uses the word, see<br />
+<a href="docs/konverzace-2026-07-25.md">docs/konverzace-2026-07-25.md</a>, in Czech)</p>
+<p>🇨🇿 Czech version: <a href="README.cs.md">README.cs.md</a> · Methodology in English:<br />
+<a href="docs/methodology.md">docs/methodology.md</a></p>
+<p><strong>Language note.</strong> The methodology and this README are available in English.<br />
+The tools' command-line flags, messages and identifiers, the chip briefs in<br />
+<code>chips/</code> and the pilot write-ups in <code>docs/</code> are in Czech — they are the<br />
+historical record of the pilots that shaped the method. A glossary of the<br />
+flags you will meet is at the end of this file.</p>
 </blockquote>
 <hr />
-<h2 id="problem-ktery-to-resi">Problém, který to řeší</h2>
-<p>Máš 100 issues a jednoho Clauda. Sériově je to týdny. Pustíš deset oken paralelně<br />
-a získáš tři nové problémy:</p>
+<h2 id="the-problem-it-solves">The problem it solves</h2>
+<p>You have 100 issues and one Claude. Serially that takes weeks. Run ten windows<br />
+in parallel and you get three new problems:</p>
 <ol>
-<li><strong>Deset session píše do jednoho working tree</strong> → navzájem si přepisují soubory.<br />
-   Není to konflikt v gitu, jsou to tiše ztracené změny.</li>
-<li><strong>Autonomní merge bez brány</strong> → „důsledně jsem to zkontroloval" je tvrzení<br />
-   modelu o sobě samém, ne ověřený fakt.</li>
-<li><strong>Nejasné hranice</strong> → dva balíčky sáhnou na stejný soubor a poslední vyhrává.</li>
+<li><strong>Ten sessions writing into one working tree</strong> → they overwrite each other's<br />
+   files. Not a git conflict — silently lost changes.</li>
+<li><strong>Autonomous merge without a gate</strong> → "I checked it thoroughly" is a claim<br />
+   the model makes about itself, not a verified fact.</li>
+<li><strong>Unclear boundaries</strong> → two packets touch the same file and the last one<br />
+   wins.</li>
 </ol>
-<p>CHIPS je sada pravidel, která tyhle tři věci řeší dřív, než pustíš první okno.</p>
+<p>CHIPS is a set of rules that fixes these three things <em>before</em> you open the<br />
+first window.</p>
 <hr />
-<h2 id="sest-pravidel">Šest pravidel</h2>
+<h2 id="six-rules">Six rules</h2>
 <table>
 <thead>
 <tr>
 <th>#</th>
-<th>Pravidlo</th>
-<th>Proč</th>
+<th>Rule</th>
+<th>Why</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>1</td>
-<td><strong>Jeden chip = jeden git worktree = jedna větev</strong></td>
-<td>izolace na úrovni filesystému, ne na úrovni důvěry</td>
+<td><strong>One chip = one git worktree = one branch</strong></td>
+<td>isolation at the filesystem level, not the trust level</td>
 </tr>
 <tr>
 <td>2</td>
-<td><strong>Dva chipy nesmí sahat na stejný soubor</strong></td>
-<td>jediné kritérium, podle kterého se řeže</td>
+<td><strong>Two chips must never touch the same file</strong></td>
+<td>the only criterion the work is sliced by</td>
 </tr>
 <tr>
 <td>3</td>
-<td><strong>Merge jen přes zelenou bránu</strong> (testy + build + smoke)</td>
-<td>autonomie se nedává promptem, ale ověřováním</td>
+<td><strong>Merge only through a green gate</strong> (tests + build + smoke)</td>
+<td>autonomy is granted by verification, not by a prompt</td>
 </tr>
 <tr>
 <td>4</td>
-<td><strong>Definition of done napsaná předem a měřitelná</strong></td>
-<td>„hotovo" musí jít ověřit příkazem, ne názorem</td>
+<td><strong>Definition of done written up front and measurable</strong></td>
+<td>"done" must be checkable by a command, not an opinion</td>
 </tr>
 <tr>
 <td>5</td>
-<td><strong>Eskalace místo hádání</strong> — co je T3, končí jako PR + otázka</td>
-<td>model, který si není jistý, nemá mergovat</td>
+<td><strong>Escalate instead of guessing</strong> — anything T3 ends as a PR + a question</td>
+<td>a model that isn't sure must not merge</td>
 </tr>
 <tr>
 <td>6</td>
-<td><strong>Chip má strop</strong> (≤ 20 issues, ≤ ~15 souborů)</td>
-<td>větší balíček nedojede v jednom kontextu</td>
+<td><strong>A chip has a ceiling</strong> (≤ 20 issues, ≤ ~15 files)</td>
+<td>a bigger packet won't finish in one context</td>
 </tr>
 </tbody>
 </table>
-<p>Pravidla 1 a 3 nejsou volitelná. Bez nich to není orchestrace, ale řízený chaos,<br />
-jehož výsledek stejně musíš celý přečíst.</p>
+<p>Rules 1 and 3 are not optional. Without them it isn't orchestration, it's<br />
+managed chaos whose output you still have to read in full.</p>
 <hr />
-<h2 id="rychly-start">Rychlý start</h2>
-<p><strong>Požadavky:</strong> Python 3.10+ a git. Nástroje jsou jen stdlib; <code>md2html.py</code><br />
-potřebuje navíc <code>pip install markdown</code>.</p>
-<pre><code class="language-bash"># 1) založ chip z šablony
-python tools/chip_new.py 01 refaktor-parseru
+<h2 id="quick-start">Quick start</h2>
+<p><strong>Requirements:</strong> Python 3.10+ and git. The tools are stdlib only; <code>md2html.py</code><br />
+additionally needs <code>pip install markdown</code>.</p>
+<pre><code class="language-bash"># 1) create a chip from the template
+python tools/chip_new.py 01 parser-refactor
 
-# 2) vyplň chips/01-refaktor-parseru.md
-#    → hlavně: Issues, Dotčené soubory, Definition of done, Ověření
+# 2) fill in chips/01-parser-refactor.md
+#    → mainly: Issues, Files touched, Definition of done, Verification (gate)
 
-# 3) zkontroluj, že si chipy nelezou do souborů
+# 3) check that chips don't step on each other's files
 python tools/chip_lint.py
 
-# 4) pusť chip v izolovaném worktree
-python tools/chip_run.py 01 --dry-run     # ukáže příkazy
-python tools/chip_run.py 01 --stav        # založí worktree + větev, přepne stav na 'running'
-python tools/chip_run.py 01 --spustit     # navíc rovnou spustí Claude Code ve worktree
-python tools/chip_run.py 02 --od ai/chip-01/zaklad   # navazující chip: větvit z předchůdce
-python tools/chip_run.py 01 --zaloz-repo  # greenfield: repo teprve vznikne
+# 4) run the chip in an isolated worktree
+python tools/chip_run.py 01 --dry-run     # show the commands
+python tools/chip_run.py 01 --stav        # create worktree + branch, set state to 'running'
+python tools/chip_run.py 01 --spustit     # additionally launch Claude Code in the worktree
+python tools/chip_run.py 02 --od ai/chip-01/base   # dependent chip: branch from its predecessor
+python tools/chip_run.py 01 --zaloz-repo  # greenfield: the repo doesn't exist yet
 
-# 5) přehled: kdo v jakém stavu, co smí běžet paralelně
-python tools/chip_status.py          # z briefů v hlavním stromě
-python tools/chip_dashboard.py       # ŽIVĚ z worktree běžících chipů (+ --watch)
+# 5) overview: who is in which state, what may run in parallel
+python tools/chip_status.py          # from the briefs in the main tree
+python tools/chip_dashboard.py       # LIVE from the worktrees of running chips (+ --watch)
 
-# 6) ověř bránu ručně, než mergneš (PreToolUse hook ji spustí ještě jednou)
-python tools/chip_gate.py 01         # běží ve worktree chipu, ne v hlavním stromě
+# 6) verify the gate by hand before merging (the PreToolUse hook runs it once more)
+python tools/chip_gate.py 01         # runs in the chip's worktree, not in the main tree
 
-# 7) AŽ PO MERGI ukliď worktree — dřív ne, hook by merge zamítl
-#    (nezmergovanou větev nástroj uklidit odmítne; opuštěný chip: --uklid --presto)
+# 7) ONLY AFTER THE MERGE clean up the worktree — earlier and the hook rejects the merge
+#    (the tool refuses to clean up an unmerged branch; abandoned chip: --uklid --presto)
 python tools/chip_run.py 01 --uklid
 </code></pre>
-<p>Bez <code>--spustit</code> otevřeš vytvořený worktree v novém okně Claude Code sám a předáš<br />
-mu vypsané zadání. Podrobně: <a href="docs/metodika.md">docs/metodika.md</a>.</p>
-<p><strong>V cizím repu, kam nemá zůstat stopa</strong>, dej briefy stranou (<code>--dir &lt;cesta&gt;</code><br />
-nebo <code>CHIPS_DIR</code>) a repo přihlas k bráně jedním netrackovaným souborem:</p>
-<pre><code class="language-bash">echo /cesta/k/briefum &gt; &lt;repo&gt;/.chips
+<p>Without <code>--spustit</code> you open the created worktree in a new Claude Code window<br />
+yourself and paste in the printed assignment. Details:<br />
+<a href="docs/methodology.md">docs/methodology.md</a>.</p>
+<p><strong>In a third-party repo that must stay clean</strong>, keep the briefs elsewhere<br />
+(<code>--dir &lt;path&gt;</code> or <code>CHIPS_DIR</code>) and register the repo with the gate through a<br />
+single untracked file:</p>
+<pre><code class="language-bash">echo /path/to/briefs &gt; &lt;repo&gt;/.chips
 echo .chips &gt;&gt; &lt;repo&gt;/.git/info/exclude
 </code></pre>
-<p>Bez toho signálu hook briefy nenajde a <strong>mlčky pustí i červený merge</strong> —<br />
-adresář <code>chips/</code>, marker <code>.chips</code> a <code>CHIPS_DIR</code> jsou jediné tři způsoby, jak<br />
-mu říct, že repo řídí CHIPS.</p>
-<p>Dva nástroje navíc, které se nepoužívají v každém kole:</p>
-<pre><code class="language-bash"># nakrájí hotový seznam issues (TODO.md, JSON) na návrhy chipů
+<p>Without that signal the hook cannot find the briefs and <strong>silently lets a red<br />
+merge through</strong> — the <code>chips/</code> directory, the <code>.chips</code> marker and <code>CHIPS_DIR</code><br />
+are the only three ways to tell it that CHIPS governs this repo.</p>
+<p>Two more tools that aren't used every round:</p>
+<pre><code class="language-bash"># slices a ready list of issues (TODO.md, JSON) into chip proposals
 python tools/chip_slice.py --todo TODO.md --zapsat chips/
 
-# podklad pro nezávislého reviewera hotového chipu
+# material for an independent reviewer of a finished chip
 python tools/chip_review.py 01
 </code></pre>
 <hr />
-<h2 id="struktura">Struktura</h2>
+<h2 id="layout">Layout</h2>
 <pre><code>CHIPS/
-├── chips/              # briefy jednotlivých balíčků (TEMPLATE.md + 01-*.md …)
+├── chips/              # briefs of individual packets (TEMPLATE.md + 01-*.md …)
 ├── docs/
-│   ├── metodika.md     # celý postup: řezání, izolace, brána, eskalace
-│   ├── konverzace-2026-07-25.md   # vznik projektu, původní diskuse
-│   └── vlna-4-preruseno.md        # co vydrží přerušení vlny (a jak ji dokončit)
-├── tests/              # 693 testů, stdlib unittest
+│   ├── methodology.md  # the whole method in English: slicing, isolation, gate, escalation
+│   ├── metodika.md     # the same, in Czech (source of truth)
+│   ├── konverzace-2026-07-25.md   # origin of the project, the original discussion (Czech)
+│   └── vlna-4-preruseno.md        # what survives an interrupted wave (Czech)
+├── tests/              # 693 tests, stdlib unittest
 └── tools/
-    ├── chip_new.py     # založí chip z šablony
-    ├── chip_slice.py   # nakrájí seznam issues na návrhy chipů
-    ├── chip_lint.py    # disjunktnost souborů + existence nárokovaných cest
-    ├── chip_run.py     # worktree + větev + volitelně spustí okno
-    ├── chip_status.py  # přehled chipů, vln a stavů (z hlavního stromu)
-    ├── chip_dashboard.py  # živá deska: čte worktree běžících chipů a git
-    ├── chip_gate.py    # spustí bránu chipu v jeho worktree
-    ├── hook_chip_gate.py  # PreToolUse hook: merge až po zelené bráně
-    ├── chip_review.py  # podklad pro nezávislého reviewera
-    ├── chip_common.py  # parser briefů (sdílený základ)
-    └── md2html.py      # .md → .html (konvence workspace)
+    ├── chip_new.py     # creates a chip from the template
+    ├── chip_slice.py   # slices a list of issues into chip proposals
+    ├── chip_lint.py    # file disjointness + existence of claimed paths
+    ├── chip_run.py     # worktree + branch + optionally launches a window
+    ├── chip_status.py  # overview of chips, waves and states (from the main tree)
+    ├── chip_dashboard.py  # live board: reads the worktrees of running chips and git
+    ├── chip_gate.py    # runs a chip's gate in its worktree
+    ├── hook_chip_gate.py  # PreToolUse hook: merge only after a green gate
+    ├── chip_review.py  # material for an independent reviewer
+    ├── chip_common.py  # brief parser (shared base)
+    └── md2html.py      # .md → .html (workspace convention)
 </code></pre>
-<p>Testy: <code>python -m unittest discover -s tests -v</code></p>
+<p>Tests: <code>python -m unittest discover -s tests -v</code></p>
 <hr />
-<h2 id="stav">Stav</h2>
-<p>Metodika je ověřená <strong>dvěma pilotními běhy a jednou opravnou vlnou</strong>.</p>
+<h2 id="status">Status</h2>
+<p>The methodology has been validated by <strong>two pilot runs and one repair wave</strong>.</p>
 <table>
 <thead>
 <tr>
 <th></th>
-<th>výsledek</th>
+<th>result</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>chipy celkem</td>
+<td>chips in total</td>
 <td>24/24 merged, 0 <code>blocked</code></td>
 </tr>
 <tr>
-<td>testy</td>
+<td>tests</td>
 <td>0 → <strong>693</strong></td>
 </tr>
 <tr>
-<td>zásahy mimo nárokované soubory</td>
+<td>edits outside the claimed files</td>
 <td>0</td>
 </tr>
 <tr>
-<td>konflikty při merge</td>
-<td>0 (jednou zaviněné nástrojem, ne chipem)</td>
+<td>merge conflicts</td>
+<td>0 (one caused by a tool, not by a chip)</td>
 </tr>
 <tr>
-<td>nálezy poslané nahoru místo tichého opravení</td>
+<td>findings escalated instead of silently fixed</td>
 <td>10</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Pilot 1 — na tomhle repu (2026-07-26).</strong> Šest chipů ve dvou vlnách, každý ve<br />
-vlastním worktree s vlastním oknem, merge až po zelené bráně.</p>
-<p><strong>Pilot 2 — cizí repo <code>pilot-repo</code> (2026-07-26).</strong> Sedm chipů, 0 → 235 testů,<br />
-7 oprav v zápisové cestě PBIP nástroje. Že hlavní strom zůstal nedotčený, je<br />
-doložené manifestem 6037 souborů před a po.</p>
-<p><strong>Vlna 4 — externí code review (2026-07-27).</strong> 30 agentů s adversariální<br />
-verifikací našlo 10 vad ve vlastních nástrojích CHIPS, včetně čtyř způsobů,<br />
-jak tiše obejít bránu. Všech 10 opraveno; průběh a poučení v<br />
-<a href="docs/vlna-4-preruseno.md">docs/vlna-4-preruseno.md</a>.</p>
-<p><strong>Vlna 5 — subagenti místo oken (2026-07-28).</strong> Tři chipy paralelně, poprvé<br />
-odbavené subagenty v jedné session místo tří oken. 3/3 merged, 0 zásahů mimo<br />
-nárok, 454 → 523 testů. Součet testů po každém mergi seděl na jedničku<br />
-(476 → 496 → 523), takže mezi chipy nevznikla žádná kolize. Dva nálezy šly<br />
-nahoru místo tichého opravení.</p>
-<p><strong>Vlna 6 — pět chipů naráz (2026-07-28).</strong> 5/5 merged, 0 zásahů mimo nárok,<br />
-523 → 676 testů. Součet po každém mergi opět seděl (548 → 562 → 585 → 590 → 676).<br />
-Vlna opravila tři vady vlastních nástrojů, u kterých platilo totéž: <strong>pravidlo<br />
-bylo správně napsané a nástroj ho porušoval.</strong> Vznikl <code>chip_dashboard.py</code>,<br />
-který na sobě rovnou doložil, proč je potřeba — nad pěti běžícími chipy hlásil<br />
-177/192 hotových issues tam, kde <code>chip_status.py</code> z hlavního stromu viděl 140/192.</p>
-<p>Co z toho plyne pro tvoje řezání, je v <a href="docs/metodika.md">docs/metodika.md</a>,<br />
-sekce „Co ukázal pilot".</p>
-<p><strong>Další krok:</strong> nasazení na reálný firemní projekt. Viz <a href="TODO.md">TODO.md</a>.</p>
+<p><strong>Pilot 1 — on this repo (2026-07-26).</strong> Six chips in two waves, each in its<br />
+own worktree with its own window, merged only after a green gate.</p>
+<p><strong>Pilot 2 — a third-party repo (2026-07-26).</strong> Seven chips, 0 → 235 tests,<br />
+7 fixes in the write path of a reporting tool. That the main tree stayed<br />
+untouched is documented by a manifest of 6037 files before and after.</p>
+<p><strong>Wave 4 — external code review (2026-07-27).</strong> 30 agents with adversarial<br />
+verification found 10 defects in CHIPS's own tools, including four ways to<br />
+silently bypass the gate. All 10 fixed; the course and lessons are in<br />
+<a href="docs/vlna-4-preruseno.md">docs/vlna-4-preruseno.md</a> (Czech).</p>
+<p><strong>Wave 5 — subagents instead of windows (2026-07-28).</strong> Three chips in<br />
+parallel, for the first time handled by subagents in one session instead of<br />
+three windows. 3/3 merged, 0 edits outside the claim, 454 → 523 tests. The test<br />
+count after every merge added up exactly (476 → 496 → 523), so no collision<br />
+arose between the chips. Two findings went upstream instead of being silently<br />
+fixed.</p>
+<p><strong>Wave 6 — five chips at once (2026-07-28).</strong> 5/5 merged, 0 edits outside the<br />
+claim, 523 → 676 tests. Again the count added up after every merge<br />
+(548 → 562 → 585 → 590 → 676). The wave fixed three defects in the project's own<br />
+tools, and each had the same shape: <strong>the rule was written correctly and the<br />
+tool violated it.</strong> <code>chip_dashboard.py</code> was born and immediately proved why it<br />
+was needed — over five running chips it reported 177/192 issues done where<br />
+<code>chip_status.py</code>, reading the main tree, saw 140/192.</p>
+<p>What this means for your own slicing is in<br />
+<a href="docs/methodology.md">docs/methodology.md</a>, section "What the pilot showed".</p>
+<p><strong>Next step:</strong> deployment on a real company project.</p>
 <hr />
-<h2 id="licence">Licence</h2>
+<h2 id="glossary-of-czech-flags-and-terms">Glossary of Czech flags and terms</h2>
+<p>The tools keep their original Czech interface so that the briefs, tests and<br />
+pilot records stay consistent. What you will meet:</p>
+<table>
+<thead>
+<tr>
+<th>Czech</th>
+<th>English</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--stav</code></td>
+<td><code>--state</code> — set the brief's state to <code>running</code> when the worktree is created</td>
+</tr>
+<tr>
+<td><code>--spustit</code></td>
+<td><code>--launch</code> — also start Claude Code in the worktree</td>
+</tr>
+<tr>
+<td><code>--od &lt;ref&gt;</code></td>
+<td><code>--from &lt;ref&gt;</code> — branch from a predecessor instead of HEAD</td>
+</tr>
+<tr>
+<td><code>--zaloz-repo</code></td>
+<td><code>--init-repo</code> — greenfield: <code>git init</code> + empty root commit</td>
+</tr>
+<tr>
+<td><code>--uklid</code> / <code>--presto</code></td>
+<td><code>--cleanup</code> / <code>--force</code> — remove the worktree (only after merge / abandon consciously)</td>
+</tr>
+<tr>
+<td><code>--zapsat</code></td>
+<td><code>--write</code> — write the sliced chips into a directory</td>
+</tr>
+<tr>
+<td><code>--zadani</code></td>
+<td><code>--assignment</code> — print the brief for the reviewer agent</td>
+</tr>
+<tr>
+<td><code>--dir</code></td>
+<td>directory with the briefs (when they don't live in the repo)</td>
+</tr>
+<tr>
+<td><code>stav:</code></td>
+<td><code>state:</code> — frontmatter field (<code>draft</code>, <code>ready</code>, <code>running</code>, <code>gated</code>, <code>merged</code>, <code>blocked</code>)</td>
+</tr>
+<tr>
+<td><code>zavisi_na:</code></td>
+<td><code>depends_on:</code> — list of chips that must be <code>merged</code> first</td>
+</tr>
+<tr>
+<td><code>worktree:</code> / <code>vetev:</code> / <code>repo:</code></td>
+<td>worktree path / branch / target repo</td>
+</tr>
+<tr>
+<td><code>greenfield: ano</code></td>
+<td><code>greenfield: yes</code></td>
+</tr>
+<tr>
+<td><code>Dotčené soubory</code></td>
+<td>"Files touched" — the section with the chip's file claim</td>
+</tr>
+<tr>
+<td><code>Ověření (brána)</code></td>
+<td>"Verification (gate)" — the commands the hook runs before merge</td>
+</tr>
+<tr>
+<td><code>Definition of done</code></td>
+<td>same</td>
+</tr>
+<tr>
+<td><code>Eskalace</code></td>
+<td>"Escalation" — what the chip must not decide by itself (T3)</td>
+</tr>
+<tr>
+<td><code>Log</code></td>
+<td>same — the chip's running record</td>
+</tr>
+<tr>
+<td><code># nový</code></td>
+<td><code># new</code> — marks a claimed file the chip will create</td>
+</tr>
+<tr>
+<td><code>vlna</code></td>
+<td>wave — chips with the same dependency depth, run in parallel</td>
+</tr>
+<tr>
+<td><code>brána</code></td>
+<td>gate</td>
+</tr>
+<tr>
+<td><code>nález</code> / <code>otázka</code></td>
+<td>finding / question (see methodology §9)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="license">License</h2>
 <p><a href="LICENSE">MIT</a> © 2026 Richard Faldyna</p>
 <div class="doc-foot">Vygenerováno z <code>README.md</code> &middot; CHIPS</div>
 </body>

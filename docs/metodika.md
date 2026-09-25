@@ -3,6 +3,9 @@
 Postup pro paralelní vývoj s AI agenty. Cílem není rychlost — cílem je, aby
 paralelizace **nezhoršila kvalitu** oproti sériové práci.
 
+> 🇬🇧 English translation: [methodology.md](methodology.md). Tenhle soubor je
+> zdroj pravdy — když se mění pravidlo, změň obě verze.
+
 ---
 
 ## 1. Slovník

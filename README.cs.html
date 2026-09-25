@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIPS</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<h1 id="chips">CHIPS</h1>
+<p><strong>Metodika paralelního vývoje s AI agenty.</strong> Práci nakrájíš na uzavřené balíčky<br />
+(„chipy"), každý dostane vlastní izolované okno, odpracuje se autonomně a smí se<br />
+sloučit teprve po projití automatické brány.</p>
+<blockquote>
+<p><strong>CHIP</strong> = <strong>C</strong>ontained <strong>H</strong>ands-off <strong>I</strong>ssue <strong>P</strong>acket<br />
+(backronym vymyšlený v tomhle projektu — mimo něj to slovo nikdo nezná, viz<br />
+<a href="docs/konverzace-2026-07-25.md">docs/konverzace-2026-07-25.md</a>)</p>
+<p>🇬🇧 English: <a href="README.md">README.md</a> · <a href="docs/methodology.md">docs/methodology.md</a></p>
+</blockquote>
+<hr />
+<h2 id="problem-ktery-to-resi">Problém, který to řeší</h2>
+<p>Máš 100 issues a jednoho Clauda. Sériově je to týdny. Pustíš deset oken paralelně<br />
+a získáš tři nové problémy:</p>
+<ol>
+<li><strong>Deset session píše do jednoho working tree</strong> → navzájem si přepisují soubory.<br />
+   Není to konflikt v gitu, jsou to tiše ztracené změny.</li>
+<li><strong>Autonomní merge bez brány</strong> → „důsledně jsem to zkontroloval" je tvrzení<br />
+   modelu o sobě samém, ne ověřený fakt.</li>
+<li><strong>Nejasné hranice</strong> → dva balíčky sáhnou na stejný soubor a poslední vyhrává.</li>
+</ol>
+<p>CHIPS je sada pravidel, která tyhle tři věci řeší dřív, než pustíš první okno.</p>
+<hr />
+<h2 id="sest-pravidel">Šest pravidel</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Pravidlo</th>
+<th>Proč</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Jeden chip = jeden git worktree = jedna větev</strong></td>
+<td>izolace na úrovni filesystému, ne na úrovni důvěry</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Dva chipy nesmí sahat na stejný soubor</strong></td>
+<td>jediné kritérium, podle kterého se řeže</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Merge jen přes zelenou bránu</strong> (testy + build + smoke)</td>
+<td>autonomie se nedává promptem, ale ověřováním</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Definition of done napsaná předem a měřitelná</strong></td>
+<td>„hotovo" musí jít ověřit příkazem, ne názorem</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Eskalace místo hádání</strong> — co je T3, končí jako PR + otázka</td>
+<td>model, který si není jistý, nemá mergovat</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Chip má strop</strong> (≤ 20 issues, ≤ ~15 souborů)</td>
+<td>větší balíček nedojede v jednom kontextu</td>
+</tr>
+</tbody>
+</table>
+<p>Pravidla 1 a 3 nejsou volitelná. Bez nich to není orchestrace, ale řízený chaos,<br />
+jehož výsledek stejně musíš celý přečíst.</p>
+<hr />
+<h2 id="rychly-start">Rychlý start</h2>
+<p><strong>Požadavky:</strong> Python 3.10+ a git. Nástroje jsou jen stdlib; <code>md2html.py</code><br />
+potřebuje navíc <code>pip install markdown</code>.</p>
+<pre><code class="language-bash"># 1) založ chip z šablony
+python tools/chip_new.py 01 refaktor-parseru
+
+# 2) vyplň chips/01-refaktor-parseru.md
+#    → hlavně: Issues, Dotčené soubory, Definition of done, Ověření
+
+# 3) zkontroluj, že si chipy nelezou do souborů
+python tools/chip_lint.py
+
+# 4) pusť chip v izolovaném worktree
+python tools/chip_run.py 01 --dry-run     # ukáže příkazy
+python tools/chip_run.py 01 --stav        # založí worktree + větev, přepne stav na 'running'
+python tools/chip_run.py 01 --spustit     # navíc rovnou spustí Claude Code ve worktree
+python tools/chip_run.py 02 --od ai/chip-01/zaklad   # navazující chip: větvit z předchůdce
+python tools/chip_run.py 01 --zaloz-repo  # greenfield: repo teprve vznikne
+
+# 5) přehled: kdo v jakém stavu, co smí běžet paralelně
+python tools/chip_status.py          # z briefů v hlavním stromě
+python tools/chip_dashboard.py       # ŽIVĚ z worktree běžících chipů (+ --watch)
+
+# 6) ověř bránu ručně, než mergneš (PreToolUse hook ji spustí ještě jednou)
+python tools/chip_gate.py 01         # běží ve worktree chipu, ne v hlavním stromě
+
+# 7) AŽ PO MERGI ukliď worktree — dřív ne, hook by merge zamítl
+#    (nezmergovanou větev nástroj uklidit odmítne; opuštěný chip: --uklid --presto)
+python tools/chip_run.py 01 --uklid
+</code></pre>
+<p>Bez <code>--spustit</code> otevřeš vytvořený worktree v novém okně Claude Code sám a předáš<br />
+mu vypsané zadání. Podrobně: <a href="docs/metodika.md">docs/metodika.md</a>.</p>
+<p><strong>V cizím repu, kam nemá zůstat stopa</strong>, dej briefy stranou (<code>--dir &lt;cesta&gt;</code><br />
+nebo <code>CHIPS_DIR</code>) a repo přihlas k bráně jedním netrackovaným souborem:</p>
+<pre><code class="language-bash">echo /cesta/k/briefum &gt; &lt;repo&gt;/.chips
+echo .chips &gt;&gt; &lt;repo&gt;/.git/info/exclude
+</code></pre>
+<p>Bez toho signálu hook briefy nenajde a <strong>mlčky pustí i červený merge</strong> —<br />
+adresář <code>chips/</code>, marker <code>.chips</code> a <code>CHIPS_DIR</code> jsou jediné tři způsoby, jak<br />
+mu říct, že repo řídí CHIPS.</p>
+<p>Dva nástroje navíc, které se nepoužívají v každém kole:</p>
+<pre><code class="language-bash"># nakrájí hotový seznam issues (TODO.md, JSON) na návrhy chipů
+python tools/chip_slice.py --todo TODO.md --zapsat chips/
+
+# podklad pro nezávislého reviewera hotového chipu
+python tools/chip_review.py 01
+</code></pre>
+<hr />
+<h2 id="struktura">Struktura</h2>
+<pre><code>CHIPS/
+├── chips/              # briefy jednotlivých balíčků (TEMPLATE.md + 01-*.md …)
+├── docs/
+│   ├── metodika.md     # celý postup: řezání, izolace, brána, eskalace
+│   ├── methodology.md  # totéž anglicky
+│   ├── konverzace-2026-07-25.md   # vznik projektu, původní diskuse
+│   └── vlna-4-preruseno.md        # co vydrží přerušení vlny (a jak ji dokončit)
+├── tests/              # 693 testů, stdlib unittest
+└── tools/
+    ├── chip_new.py     # založí chip z šablony
+    ├── chip_slice.py   # nakrájí seznam issues na návrhy chipů
+    ├── chip_lint.py    # disjunktnost souborů + existence nárokovaných cest
+    ├── chip_run.py     # worktree + větev + volitelně spustí okno
+    ├── chip_status.py  # přehled chipů, vln a stavů (z hlavního stromu)
+    ├── chip_dashboard.py  # živá deska: čte worktree běžících chipů a git
+    ├── chip_gate.py    # spustí bránu chipu v jeho worktree
+    ├── hook_chip_gate.py  # PreToolUse hook: merge až po zelené bráně
+    ├── chip_review.py  # podklad pro nezávislého reviewera
+    ├── chip_common.py  # parser briefů (sdílený základ)
+    └── md2html.py      # .md → .html (konvence workspace)
+</code></pre>
+<p>Testy: <code>python -m unittest discover -s tests -v</code></p>
+<hr />
+<h2 id="stav">Stav</h2>
+<p>Metodika je ověřená <strong>dvěma pilotními běhy a jednou opravnou vlnou</strong>.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>výsledek</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>chipy celkem</td>
+<td>24/24 merged, 0 <code>blocked</code></td>
+</tr>
+<tr>
+<td>testy</td>
+<td>0 → <strong>693</strong></td>
+</tr>
+<tr>
+<td>zásahy mimo nárokované soubory</td>
+<td>0</td>
+</tr>
+<tr>
+<td>konflikty při merge</td>
+<td>0 (jednou zaviněné nástrojem, ne chipem)</td>
+</tr>
+<tr>
+<td>nálezy poslané nahoru místo tichého opravení</td>
+<td>10</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Pilot 1 — na tomhle repu (2026-07-26).</strong> Šest chipů ve dvou vlnách, každý ve<br />
+vlastním worktree s vlastním oknem, merge až po zelené bráně.</p>
+<p><strong>Pilot 2 — cizí repo <code>pilot-repo</code> (2026-07-26).</strong> Sedm chipů, 0 → 235 testů,<br />
+7 oprav v zápisové cestě PBIP nástroje. Že hlavní strom zůstal nedotčený, je<br />
+doložené manifestem 6037 souborů před a po.</p>
+<p><strong>Vlna 4 — externí code review (2026-07-27).</strong> 30 agentů s adversariální<br />
+verifikací našlo 10 vad ve vlastních nástrojích CHIPS, včetně čtyř způsobů,<br />
+jak tiše obejít bránu. Všech 10 opraveno; průběh a poučení v<br />
+<a href="docs/vlna-4-preruseno.md">docs/vlna-4-preruseno.md</a>.</p>
+<p><strong>Vlna 5 — subagenti místo oken (2026-07-28).</strong> Tři chipy paralelně, poprvé<br />
+odbavené subagenty v jedné session místo tří oken. 3/3 merged, 0 zásahů mimo<br />
+nárok, 454 → 523 testů. Součet testů po každém mergi seděl na jedničku<br />
+(476 → 496 → 523), takže mezi chipy nevznikla žádná kolize. Dva nálezy šly<br />
+nahoru místo tichého opravení.</p>
+<p><strong>Vlna 6 — pět chipů naráz (2026-07-28).</strong> 5/5 merged, 0 zásahů mimo nárok,<br />
+523 → 676 testů. Součet po každém mergi opět seděl (548 → 562 → 585 → 590 → 676).<br />
+Vlna opravila tři vady vlastních nástrojů, u kterých platilo totéž: <strong>pravidlo<br />
+bylo správně napsané a nástroj ho porušoval.</strong> Vznikl <code>chip_dashboard.py</code>,<br />
+který na sobě rovnou doložil, proč je potřeba — nad pěti běžícími chipy hlásil<br />
+177/192 hotových issues tam, kde <code>chip_status.py</code> z hlavního stromu viděl 140/192.</p>
+<p>Co z toho plyne pro tvoje řezání, je v <a href="docs/metodika.md">docs/metodika.md</a>,<br />
+sekce „Co ukázal pilot".</p>
+<p><strong>Další krok:</strong> nasazení na reálný firemní projekt. Viz <a href="TODO.md">TODO.md</a>.</p>
+<hr />
+<h2 id="licence">Licence</h2>
+<p><a href="LICENSE">MIT</a> © 2026 Richard Faldyna</p>
+<div class="doc-foot">Vygenerováno z <code>README.cs.md</code> &middot; CHIPS</div>
+</body>
+</html>
