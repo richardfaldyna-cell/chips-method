@@ -72,12 +72,22 @@ strong { color: #10222e; }
       patří orchestrátorovi"), chip 25 ho přegeneroval sám. Obě čtení jsou<br />
       obhajitelná a <code>chip_lint.py</code> ani <code>TEMPLATE.md</code> neříkají které. Rozhodnout<br />
       a zapsat do metodiky — teď to závisí na tom, koho se zeptáš.</li>
-<li>[ ] <strong><code>--spustit</code> z orchestrátorského shellu potřebuje KRÁTKÝ timeout.</strong><br />
+<li>
+<p>[ ] <strong><code>--spustit</code> z orchestrátorského shellu potřebuje KRÁTKÝ timeout.</strong><br />
       Ověřeno na chipu 25 třemi pokusy: spuštění rovnou na pozadí → Claude Code<br />
       se vyhodnotí jako neinteraktivní a hned skončí (exit 0, nula práce);<br />
       dlouhý timeout → po vypršení se proces <strong>zabije</strong> i s rozdělanou prací<br />
       (exit 143). Funguje jen krátký limit, po kterém se běh přesune na pozadí<br />
-      a doběhne. Zapsat do metodiky k <code>--spustit</code>, je to past, ne detail.</li>
+      a doběhne. Zapsat do metodiky k <code>--spustit</code>, je to past, ne detail.</p>
+</li>
+<li>
+<p>[x] <strong>Zadání od <code>chip_run.py</code> posílalo agenta do briefu v hlavním stromě</strong> —<br />
+      vyřešeno 2026-09-26: <code>zadani()</code> bere <code>brief=brief_ke_stavu(...)</code>, takže<br />
+      zadání ukazuje na kopii ve worktree (tu, kterou <code>--stav</code> přepisuje);<br />
+      originál jen když kopie neexistuje (<code>--dir</code>, netrackovaný brief).<br />
+      Nalezeno při vlně 0 stránky CHIPS na webu; test<br />
+<code>test_zadani_posila_agenta_do_kopie_ve_worktree</code> na staré verzi padá.</p>
+</li>
 </ul>
 <h2 id="brana">Brána</h2>
 <ul>

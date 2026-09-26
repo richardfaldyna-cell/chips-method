@@ -394,6 +394,31 @@ class TestBriefVRepu(ZakladChipu):
                          pred.replace(b"stav: ready", b"stav: running", 1))
         self.assertIn("ve worktree chipu", out)
 
+    def test_zadani_posila_agenta_do_kopie_ve_worktree(self) -> None:
+        """Zadání musí ukazovat na brief, který agent smí editovat.
+
+        Dřív ukazovalo na originál v hlavním stromě — agent, který zadání
+        poslechl, psal Log do hlavního stromu (nález z vlny 0 stránky CHIPS).
+        """
+        def falesny_worktree_add(cmd, **_):
+            self.kopie_ve_worktree()
+            return 0
+
+        with mock.patch.object(subprocess, "call", side_effect=falesny_worktree_add):
+            rc, out = self.spust("07")
+        self.assertEqual(rc, 0)
+        _, _, worktree = chip_run.cesty(self.chip())
+        kopie = (worktree / "chips" / self.brief.name).resolve()
+        self.assertIn(f"Brief (celý si ho přečti jako první): {kopie}", out)
+        self.assertNotIn(str(self.brief.resolve()), out)
+
+    def test_zadani_bez_kopie_ukazuje_na_original(self) -> None:
+        """Netrackovaný brief do worktree nedojde — pak zbývá jen originál."""
+        with mock.patch.object(subprocess, "call", return_value=0):
+            rc, out = self.spust("07")
+        self.assertEqual(rc, 0)
+        self.assertIn(str(self.brief.resolve()), out)
+
 
 class TestUklid(ZakladChipu):
     """`--uklid` patří až po mergi — a musí doopravdy uklidit."""

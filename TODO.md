@@ -25,6 +25,13 @@
       (exit 143). Funguje jen krátký limit, po kterém se běh přesune na pozadí
       a doběhne. Zapsat do metodiky k `--spustit`, je to past, ne detail.
 
+- [x] **Zadání od `chip_run.py` posílalo agenta do briefu v hlavním stromě** —
+      vyřešeno 2026-09-26: `zadani()` bere `brief=brief_ke_stavu(...)`, takže
+      zadání ukazuje na kopii ve worktree (tu, kterou `--stav` přepisuje);
+      originál jen když kopie neexistuje (`--dir`, netrackovaný brief).
+      Nalezeno při vlně 0 stránky CHIPS na webu; test
+      `test_zadani_posila_agenta_do_kopie_ve_worktree` na staré verzi padá.
+
 ## Brána
 
 - [ ] Marker `.chips` a `CHIPS_DIR` zná zatím jen hook — ostatní nástroje chtějí
