@@ -403,14 +403,21 @@ def cesty(chip) -> tuple[Path | None, str, Path]:
     return repo, vetev, worktree
 
 
-def zadani(chip, worktree: Path, vetev: str, od: str | None = None) -> str:
+def zadani(chip, worktree: Path, vetev: str, od: str | None = None,
+           brief: Path | None = None) -> str:
     """Text zadání pro nové okno (šablona `ZADANI` vyplněná daty chipu).
 
     `od` je ref, ze kterého se větvilo. Bez něj vznikne přesně dnešní text —
     zmínka o cizí rozpracované práci by tam byla lež.
+
+    `brief` je kopie, kterou má agent editovat; `main()` sem dává
+    `brief_ke_stavu()`. Zadání dřív vždy ukazovalo na originál v hlavním
+    stromě, takže agent psal Log a checkboxy tam — přesně to, co pravidlo
+    „nesahej na brief běžícího chipu" zakazuje, a merge pak skončil konfliktem.
     """
+    brief = (brief or chip.path).resolve()
     return ZADANI.format(id=chip.id, nazev=chip.nazev, worktree=worktree,
-                         vetev=vetev, brief=chip.path.resolve(),
+                         vetev=vetev, brief=brief,
                          zaklad=ZAKLAD.format(od=od) if od else "")
 
 
@@ -553,7 +560,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"! stav v {chip.path.name} ({kde}) se nepodařilo přepsat — "
                   f"přepiš ho ručně")
 
-    text = zadani(chip, worktree, vetev, od=args.od)
+    text = zadani(chip, worktree, vetev, od=args.od,
+                  brief=brief_ke_stavu(chip, repo, worktree))
     print("\n" + "=" * 72)
     print("ZADÁNÍ PRO NOVÉ OKNO (zkopíruj do Claude Code otevřeného ve worktree):")
     print("=" * 72)
