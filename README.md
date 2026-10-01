@@ -125,7 +125,7 @@ CHIPS/
 │   ├── metodika.md     # the same, in Czech (source of truth)
 │   ├── konverzace-2026-07-25.md   # origin of the project, the original discussion (Czech)
 │   └── vlna-4-preruseno.md        # what survives an interrupted wave (Czech)
-├── tests/              # 693 tests, stdlib unittest
+├── tests/              # 695 tests, stdlib unittest
 └── tools/
     ├── chip_new.py     # creates a chip from the template
     ├── chip_slice.py   # slices a list of issues into chip proposals
@@ -151,7 +151,7 @@ The methodology has been validated by **two pilot runs and one repair wave**.
 | | result |
 |---|---|
 | chips in total | 24/24 merged, 0 `blocked` |
-| tests | 0 → **693** |
+| tests | 0 → **695** |
 | edits outside the claimed files | 0 |
 | merge conflicts | 0 (one caused by a tool, not by a chip) |
 | findings escalated instead of silently fixed | 10 |

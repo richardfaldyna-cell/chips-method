@@ -114,7 +114,7 @@ CHIPS/
 │   ├── methodology.md  # totéž anglicky
 │   ├── konverzace-2026-07-25.md   # vznik projektu, původní diskuse
 │   └── vlna-4-preruseno.md        # co vydrží přerušení vlny (a jak ji dokončit)
-├── tests/              # 693 testů, stdlib unittest
+├── tests/              # 695 testů, stdlib unittest
 └── tools/
     ├── chip_new.py     # založí chip z šablony
     ├── chip_slice.py   # nakrájí seznam issues na návrhy chipů
@@ -140,7 +140,7 @@ Metodika je ověřená **dvěma pilotními běhy a jednou opravnou vlnou**.
 | | výsledek |
 |---|---|
 | chipy celkem | 24/24 merged, 0 `blocked` |
-| testy | 0 → **693** |
+| testy | 0 → **695** |
 | zásahy mimo nárokované soubory | 0 |
 | konflikty při merge | 0 (jednou zaviněné nástrojem, ne chipem) |
 | nálezy poslané nahoru místo tichého opravení | 10 |
