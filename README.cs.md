@@ -137,7 +137,7 @@ Testy: `python -m unittest discover -s tests -v`
 
 Metodika je ověřená **dvěma pilotními běhy a jednou opravnou vlnou**.
 
-| | výsledek |
+| ukazatel | výsledek |
 |---|---|
 | chipy celkem | 24/24 merged, 0 `blocked` |
 | testy | 0 → **695** |

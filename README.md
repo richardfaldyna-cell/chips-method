@@ -148,7 +148,7 @@ Tests: `python -m unittest discover -s tests -v`
 
 The methodology has been validated by **two pilot runs and one repair wave**.
 
-| | result |
+| metric | result |
 |---|---|
 | chips in total | 24/24 merged, 0 `blocked` |
 | tests | 0 → **695** |
