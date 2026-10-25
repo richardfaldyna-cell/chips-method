@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 36<br />
+nazev: nested-repos<br />
+stav: merged</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<p>zavisi_na: 35<br />
+repo: ..<br />
+greenfield: ne<br />
+vetev: ai/chip-36/nested-repos<br />
+worktree: ../CHIPS-chip-36</p>
+<hr />
+<h1 id="chip-36-nested-repos-nastroje-nad-briefy-pro-vic-repozitaru-a-nad-windows-shellem">CHIP 36 — nested repos: nástroje nad briefy pro VÍC repozitářů a nad Windows shellem</h1>
+<p>První nasazení na projekt, kde jeden adresář s briefy (<code>--dir</code>) řídí 18 chipů přes<br />
+13 různých (vnořených) repozitářů, odhalilo pět vad nástrojů (2026-10-25, session<br />
+nad domácím infrastrukturním projektem). Společný jmenovatel: nástroje mlčky<br />
+předpokládají jedno repo, jeden shell a čistý pracovní strom. Žádná z vad není<br />
+metodická — pravidla jsou napsaná správně, nástroj je porušoval (týž tvar jako<br />
+ve vlně 6).</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>chip_lint.py</code> porovnává nároky <strong>ukotvené k <code>repo:</code></strong> (absolutní cesta<br />
+      repa + nárok), ne holé relativní cesty: <code>README.md</code> chipu v repu A a<br />
+<code>README.md</code> chipu v repu B nekolidují; <code>sub/README.md</code> v rodičovském repu ×<br />
+<code>README.md</code> ve vnořeném repu <code>sub/</code> kolidují dál (týž soubor). Hlášení<br />
+      zůstává v nárocích z briefu, u dvou různých rep s poznámkou</li>
+<li>[x] #2 — <code>chip_gate.py</code>: **tag <code>`` bloku určuje shell**.</code>bash<code>/</code>sh<code>/</code>shell<code>→
+      bash (na Windows Git Bash vedle</code>git.exe<code>, přepsatelné</code>CHIPS_BASH<code>; WSL</code>System32\bash.exe<code>se nebere),</code>cmd<code>/</code>bat<code>/</code>batch<code>→</code>cmd.exe<code>(jen
+      Windows), bez tagu nebo jiný tag → systémový shell jako dosud. Bash
+      nenalezen → příkaz skončí 127 s hláškou, co nainstalovat nebo jak blok
+      otagovat — žádný tichý fallback na cmd.</code>prikazy()<code>zůstává (chip_review ho
+      počítá), přibývá</code>prikazy_se_shellem()`</li>
+<li>[x] #3 — <code>chip_review.py</code> bez <code>--commit</code> hodnotí <strong>celou práci chipu</strong>, ne jen<br />
+      poslední commit: rozsah <code>&lt;merge-base&gt;..HEAD</code>, kde základ je první z: HEAD<br />
+      hlavního stromu z <code>repo:</code> (když se liší od kontrolovaného stromu), <code>master</code>,<br />
+<code>main</code>, <code>origin/HEAD</code>. Když HEAD hlavní větev je nebo základ nejde určit →<br />
+<code>HEAD</code> jako dosud. Hlavička vypíše použitý rozsah a proč</li>
+<li>[x] #4 — <code>chip_lint.py</code> ověřuje existenci nároků <strong>proti HEAD</strong> (<code>git ls-tree -r
+      HEAD</code>), ne proti pracovnímu stromu: <code># nový</code> na souboru, který leží na disku<br />
+      jen netrackovaný, nevaruje; nárok bez <code># nový</code> na soubor jen v pracovním<br />
+      stromu je chyba („worktree větví z HEAD, chip ho neuvidí — commitni, nebo<br />
+      označ <code># nový</code>"). Mimo git nebo bez commitu platí dosavadní kontrola disku;<br />
+      vzory se dál rozbalují z disku</li>
+<li>[x] #5 — <code>chip_run.py</code> odmítne založit worktree, který by ležel <strong>uvnitř jiného<br />
+      git stromu</strong> (vnořené repo: <code>../X-chip-NN</code> padne do rodičovského repa jako<br />
+      netrackovaný adresář) i uvnitř vlastního repa; hláška říká, co napsat do<br />
+<code>worktree:</code>. Kontrola až za <code>--uklid</code>, ten se nemění; <code>--dry-run</code> ji hlásí<br />
+      taky</li>
+<li>[x] #6 — testy ke každému bodu, každý tak, aby na dosavadním kódu padal (kolize<br />
+      dvou rep, cmd blok na Windows, dva commity na větvi chipu, netrackovaný<br />
+<code># nový</code>, worktree do rodičovského repa)</li>
+<li>[x] #7 — <code>docs/metodika.md</code> i <code>docs/methodology.md</code> (nárok relativní k <code>repo:</code><br />
+      a týž soubor přes dvě repa; existence = HEAD; shell podle tagu; umístění<br />
+      worktree u vnořeného repa; review celé větve), poznámka u bloku brány<br />
+      v <code>chips/TEMPLATE.md</code>, README (CS i EN); <code>.html</code> přegenerovat</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_lint.py
+tools/chip_gate.py
+tools/chip_review.py
+tools/chip_run.py
+tests/test_chip_lint.py
+tests/test_chip_gate.py
+tests/test_chip_review.py
+tests/test_chip_run.py
+docs/metodika.md
+docs/methodology.md
+chips/TEMPLATE.md
+README.md
+README.cs.md
+TODO.md
+.github/workflows/tests.yml    # nový
+</code></pre>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> zelené, počet = výchozí stav + nové testy</li>
+<li>[x] lint nad fixture se dvěma repy a stejnojmenným <code>README.md</code> v obou nárocích<br />
+      hlásí 0 kolizí; <code>sub/README.md</code> v rodiči × <code>README.md</code> ve vnořeném <code>sub/</code><br />
+      hlásí 1 kolizi</li>
+<li>[x] brána s blokem <code>cmd a příkazem s `%CD%` na Windows projde; blok</code>bash<br />
+      s <code>&amp;&amp;</code>/<code>$VAR</code> projde přes bash; bash nenalezen → exit 127, ne průchod</li>
+<li>[x] <code>chip_review.py NN</code> bez <code>--commit</code> nad větví chipu se dvěma commity vypíše<br />
+      soubory obou</li>
+<li>[x] lint: <code># nový</code> na netrackovaném souboru → 0 varování; nárok bez <code># nový</code> jen<br />
+      na disku → 1 chyba</li>
+<li>[x] <code>chip_run.py NN</code> s worktree uvnitř rodičovského git stromu → exit 1 a<br />
+<code>git worktree add</code> se nespustí</li>
+<li>[x] strength test: každá oprava zvlášť vrácená zpět shodí aspoň jeden nový test</li>
+<li>[x] <code>python tools/chip_lint.py</code> exit 0 (i nad 36)</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests
+python tools/chip_lint.py
+python tools/chip_review.py --help
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna rozhodovací logiky hooku (co je merge, co je chip větev, kde se ověřuje)</li>
+<li>jakákoli cesta, kdy nenalezený shell nebo neurčitelný rozsah vede na průchod<br />
+  brány / vypuštění kontroly</li>
+<li>změna sémantiky <code>prekryv()</code> pro cesty v témže repu</li>
+<li>nová závislost</li>
+<li>soubor mimo „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li><code>chip_lint.git_koren()</code> a <code>_git_spolecny_adresar()</code> už umí poznat strom a jeho<br />
+  repo bez subprocesu — <code>chip_run</code> si je může půjčit (chip_review už z <code>chip_lint</code><br />
+  importuje).</li>
+<li><code>chip_review.zmeny()</code> bere <code>a..b</code> i <code>a...b</code> (obojí obsahuje <code>..</code>); <code>ref_konce()</code><br />
+  vrací <code>HEAD</code>.</li>
+<li>Na stroji s Git for Windows leží bash v <code>&lt;Git&gt;/bin/bash.exe</code>;<br />
+<code>shutil.which("bash")</code> může vrátit WSL launcher ze <code>System32</code>, který není<br />
+  použitelný.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-10-25</td>
+<td>ready</td>
+<td>z pěti nálezů session nad projektem s 18 chipy ve 13 vnořených repech (Windows): falešné kolize mezi repy (176 chyb), bash syntaxe v bloku brány běžela pod cmd.exe, review hodnotil jen HEAD, <code># nový</code> varoval u netrackovaného souboru, relativní worktree vnořeného repa spadl do rodiče</td>
+</tr>
+<tr>
+<td>2026-10-25</td>
+<td>gated</td>
+<td>#1 <code>kotva()</code>/<code>ukotvi()</code>: kolize nad <code>&lt;repo&gt;/&lt;nárok&gt;</code>, přes dvě repa s poznámkou „týž soubor přes dvě repa"; #2 <code>shell_bloku()</code>, <code>bloky()</code>, <code>prikazy_se_shellem()</code>, <code>najdi_bash()</code> (CHIPS_BASH → <code>&lt;Git&gt;/bin/bash.exe</code> → PATH bez System32), <code>argv_shellu()</code>, <code>spust(..., shell=)</code>; bash nenalezen → 127 „bash nenalezen", cmd mimo Windows → 127; #3 <code>vychozi_rozsah()</code>: hlavní strom z <code>repo:</code> → master → main → origin/HEAD, hlavička <code>rozsah: … (merge-base s …)</code>, <code>--commit HEAD</code> = jen poslední commit; #4 <code>soubory_v_head()</code> (<code>git ls-tree -r -z</code>, jen kořen stromu, None = disk jako dřív) + <code>v_head()</code>, cache na běh lintu; nárok jen na disku → „ne v HEAD"; #5 <code>strom_nad()</code> v chip_run (půjčený <code>chip_lint.git_koren</code>), odmítá i vlastní repo a <code>--dry-run</code>, hláška navrhne <code>worktree:</code>. <strong>Testy +58</strong> (lint 21, gate 21, review 7, run 9). <strong>Důkaz síly</strong> ve vývojovém repu: nástroje odstashované → 52 z 58 nových testů červených, žádný starý. <strong>Živě:</strong> kopie 18 briefů nasazení přepnutá na ready: starý lint 176 kolizí, nový 0 falešných (10 skutečných překryvů stejnorepových dvojic); <code>chip_run --dry-run</code> nad vnořeným repem odmítne worktree do rodiče.</td>
+</tr>
+<tr>
+<td>2026-10-25</td>
+<td>merged</td>
+<td>Ve vývojovém repu brána zelená (927 testů, lint 0), merge <code>--no-ff</code>, worktree uklizen. Review (nový výchozí rozsah merge-base..HEAD): 16 souborů, všechny v nároku.</td>
+</tr>
+<tr>
+<td>2026-10-25</td>
+<td>merged</td>
+<td><strong>Port do veřejného repa <code>chips-method</code>.</strong> Hlášky nástrojů i nové testy české (<code>KOLIZE</code>, <code>rozsah:</code>, „bash nenalezen", <code># nový</code>, <code>--uklid</code>), metodika doplněna v obou jazycích. Navíc proti vývojové verzi: CI workflow <code>.github/workflows/tests.yml</code> (unittest + lint na ubuntu i windows), na který už mířil odznak vývojového README. 757 → 815 testů.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>36-nested-repos.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>

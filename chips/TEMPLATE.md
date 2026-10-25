@@ -70,6 +70,11 @@ python -m build
 python smoke_test.py
 ```
 
+Tag bloku určuje shell, ve kterém příkazy běží: ```` ```bash ```` běží v bashi
+(na Windows Git Bash), ```` ```cmd ```` v cmd.exe (jen Windows), bez tagu
+systémový shell. Piš příkazy pro shell, kterým blok označíš — `&&`, `||`
+a `$VAR` jsou bash, `%VAR%` je cmd.
+
 ## Eskalace — co NEROZHODOVAT sám (T3)
 
 Při zásahu do čehokoli z tohoto seznamu: **zastav, otevři PR s otázkou, nehádej.**

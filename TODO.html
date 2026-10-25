@@ -62,6 +62,12 @@ strong { color: #10222e; }
       Vývojové repo má navíc vlnu 26–32 (anglické rozhraní nástrojů, <code>pyproject.toml</code>,<br />
 <code>docs/install.md</code>, CI) — ta se <strong>nevydává</strong>; co se portuje, se přepisuje na<br />
       české rozhraní tohoto repa.</li>
+<li>[x] <strong>Chip 36 portován z vývojového repa (2026-10-25):</strong> nástroje nad jedním<br />
+      adresářem briefů pro víc (vnořených) repozitářů a nad Windows shellem —<br />
+      kolize ukotvené k <code>repo:</code>, shell brány podle tagu bloku, review celé větve,<br />
+      existence nároků proti HEAD, worktree mimo cizí git strom. Hlášky české,<br />
+<code>--uklid</code> místo <code>--cleanup</code>; 757 → 815 testů. Přidán CI workflow<br />
+      (<code>.github/workflows/tests.yml</code>), na který už míří odznak vývojového README.</li>
 <li>[ ] Rozhodnout, jestli vlnu 26–32 někdy vydat celou, nebo veřejnou verzi nechat<br />
       trvale na českém rozhraní s anglickými novými nástroji.</li>
 </ul>
@@ -78,6 +84,13 @@ strong { color: #10222e; }
       na Linuxu stejná sada běží ~5 s — nejdřív zjistit, co je na Windows<br />
       pomalé (git subprocess, antivirus), než vznikne zkratka. Pouští se po každém<br />
       mergi. Zvážit <code>--rychla</code> variantu pro merge a plnou jen na konci vlny.</li>
+<li>[ ] <strong>Časové testy brány (chip 35) jsou pod zátěží těsné.</strong> <code>kill_tree</code> strom<br />
+      procesů zabije (ověřeno 2026-10-25: 0 přeživších), ale samotný<br />
+<code>taskkill /F /T</code> tu trvá ~8 s, takže 2 s timeout + kill = 10–12 s proti<br />
+      hranici 15 s v <code>test_timeout_zastavi_potomka_ne_jen_shell</code><br />
+      a <code>test_prikaz_delsi_nez_rozpocet_selze_vcas</code>. Při souběžném běhu dvou sad<br />
+      spadly (19,8 s), samostatně projdou. Buď hranici odvodit od změřeného<br />
+<code>taskkill</code>, nebo zabíjet přes Job Object místo <code>taskkill</code>.</li>
 <li>[ ] <strong>Patří <code>.html</code> briefu agentovi, nebo orchestrátorovi?</strong> Chip 23 ho<br />
       schválně nepřegeneroval („<code>.html</code> k briefu není v Dotčených souborech,<br />
       patří orchestrátorovi"), chip 25 ho přegeneroval sám. Obě čtení jsou<br />

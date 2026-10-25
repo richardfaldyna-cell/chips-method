@@ -544,6 +544,172 @@ class TestHook(Zaklad):
                                  chip_gate.id_z_vetve(v))
 
 
+
+
+class TestShellBloku(Zaklad):
+    """Chip 36 — tag ``` bloku rozhoduje, v jakém shellu příkaz brány běží.
+
+    Šablona píše ```bash, autoři briefů tedy píšou bash syntaxi; `shell=True`
+    je na Windows cmd.exe, který ji čte špatně a často přesto skončí 0 — zelená
+    brána, která nic neověřila (nález nad vnořenými repy home-labu, 2026-10-25).
+    """
+
+    def test_tag_rozhoduje(self) -> None:
+        self.assertEqual(chip_gate.shell_bloku("bash"), "bash")
+        self.assertEqual(chip_gate.shell_bloku("sh"), "bash")
+        self.assertEqual(chip_gate.shell_bloku("Bash title=x"), "bash")
+        self.assertEqual(chip_gate.shell_bloku("cmd"), "cmd")
+        self.assertEqual(chip_gate.shell_bloku("bat"), "cmd")
+        self.assertIsNone(chip_gate.shell_bloku(""))
+        self.assertIsNone(chip_gate.shell_bloku("   "))
+        self.assertIsNone(chip_gate.shell_bloku("python"))
+
+    def test_prikazy_se_shellem_nese_tag_kazdeho_bloku(self) -> None:
+        c = self.nacti(prikazy="echo a\n```\n\n```cmd\n# komentar\necho b")
+        self.assertEqual(chip_gate.prikazy_se_shellem(c),
+                         [("bash", "echo a"), ("cmd", "echo b")])
+        self.assertEqual(chip_gate.prikazy(c), ["echo a", "echo b"])
+
+    def test_bez_tagu_je_systemovy_shell(self) -> None:
+        self.assertEqual(chip_gate.argv_shellu(None, "echo x"), ("echo x", True))
+        self.assertEqual(chip_gate.argv_shellu("ruby", "echo x"), ("echo x", True))
+
+    def test_bash_blok_jde_pres_bash_c(self) -> None:
+        with patch.object(chip_gate, "najdi_bash", return_value="/x/bash"):
+            self.assertEqual(chip_gate.argv_shellu("bash", "a && b"),
+                             (["/x/bash", "-c", "a && b"], False))
+
+    def test_bash_na_windows_bez_bashe_selze_misto_cmd(self) -> None:
+        with patch.object(chip_gate, "najdi_bash", return_value=None), \
+             patch.object(os, "name", "nt"):
+            with self.assertRaises(chip_gate.ShellNenalezen):
+                chip_gate.argv_shellu("bash", "echo x")
+            kod, vystup = chip_gate.spust(self.repo, "echo x", shell="bash")
+        self.assertEqual(kod, 127)
+        self.assertIn("bash nenalezen", vystup)
+        self.assertIn("```cmd", vystup)
+
+    def test_bash_mimo_windows_bez_bashe_pada_na_sh(self) -> None:
+        with patch.object(chip_gate, "najdi_bash", return_value=None), \
+             patch.object(os, "name", "posix"):
+            self.assertEqual(chip_gate.argv_shellu("bash", "a && b"), ("a && b", True))
+
+    def test_cmd_mimo_windows_selze(self) -> None:
+        with patch.object(os, "name", "posix"):
+            with self.assertRaises(chip_gate.ShellNenalezen):
+                chip_gate.argv_shellu("cmd", "echo x")
+            kod, vystup = chip_gate.spust(self.repo, "echo x", shell="cmd")
+        self.assertEqual(kod, 127)
+        self.assertIn("Windows", vystup)
+
+    def test_cmd_na_windows_je_systemovy_shell(self) -> None:
+        with patch.object(os, "name", "nt"):
+            self.assertEqual(chip_gate.argv_shellu("cmd", "echo %CD%"), ("echo %CD%", True))
+
+    @unittest.skipUnless(os.name == "nt", "cmd.exe existuje jen na Windows")
+    def test_cmd_blok_bezi_v_cmd(self) -> None:
+        kod, vystup = chip_gate.spust(self.repo, "echo %CD%", shell="cmd")
+        self.assertEqual(kod, 0, vystup)
+        self.assertEqual(Path(vystup.strip()).resolve(), self.repo.resolve())
+
+    def test_bash_blok_bezi_v_bashi(self) -> None:
+        if chip_gate.najdi_bash() is None:                    # pragma: no cover
+            self.skipTest("bash na tomhle stroji není")
+        kod, vystup = chip_gate.spust(self.repo, 'X=ok && echo "$X" || exit 1', shell="bash")
+        self.assertEqual(kod, 0, vystup)
+        self.assertEqual(vystup.strip(), "ok")
+
+    def test_bash_blok_propaguje_navratovy_kod(self) -> None:
+        if chip_gate.najdi_bash() is None:                    # pragma: no cover
+            self.skipTest("bash na tomhle stroji není")
+        kod, _ = chip_gate.spust(self.repo, "false || exit 3", shell="bash")
+        self.assertEqual(kod, 3)
+
+    def test_bash_blok_bezi_v_korenu_repa(self) -> None:
+        if chip_gate.najdi_bash() is None:                    # pragma: no cover
+            self.skipTest("bash na tomhle stroji není")
+        kod, vystup = chip_gate.spust(self.repo, 'python -c "import os; print(os.getcwd())"',
+                                      shell="bash")
+        self.assertEqual(kod, 0, vystup)
+        self.assertEqual(Path(vystup.strip()).resolve(), self.repo.resolve())
+
+    def test_brana_spousti_bash_blok_v_bashi(self) -> None:
+        """`[ -d . ]` je bash; cmd.exe žádné `[` nemá a brána by spadla."""
+        if chip_gate.najdi_bash() is None:                    # pragma: no cover
+            self.skipTest("bash na tomhle stroji není")
+        c = self.nacti(prikazy='[ -d . ] && python -c "pass"')
+        ok, hlaseni = chip_gate.brana(c, self.repo)
+        self.assertTrue(ok, hlaseni)
+
+    @unittest.skipUnless(os.name == "nt", "cmd.exe existuje jen na Windows")
+    def test_brana_spousti_cmd_blok_v_cmd(self) -> None:
+        uloz_brief(self.chips, "04", self.repo, "if not exist a.txt exit 1")
+        p = self.chips / "04-pokus.md"
+        p.write_text(p.read_text(encoding="utf-8").replace("```bash", "```cmd"),
+                     encoding="utf-8")
+        chip_common.nastav_chips_dir(self.chips)
+        ok, hlaseni = chip_gate.brana(chip_gate.najdi_chip("04", None), self.repo)
+        self.assertTrue(ok, hlaseni)
+
+    def test_brana_je_cervena_kdyz_shell_chybi(self) -> None:
+        """Bez shellu žádný běh, tedy červená. Nikdy běh v jiném shellu."""
+        c = self.nacti(prikazy='python -c "pass"')
+        with patch.object(chip_gate, "najdi_bash", return_value=None), \
+             patch.object(os, "name", "nt"):
+            ok, hlaseni = chip_gate.brana(c, self.repo)
+        self.assertFalse(ok)
+        self.assertIn("exit 127", " ".join(hlaseni))
+        self.assertIn("bash nenalezen", " ".join(hlaseni))
+
+
+class TestNajdiBash(Zaklad):
+    """Chip 36 — který bash dostane ```bash blok."""
+
+    def test_chips_bash_ma_prednost(self) -> None:
+        muj = self.tmp / "mujbash.exe"
+        muj.write_text("", encoding="utf-8")
+        with patch.dict(os.environ, {"CHIPS_BASH": str(muj)}):
+            self.assertEqual(chip_gate.najdi_bash(), str(muj))
+
+    def test_neexistujici_chips_bash_se_ignoruje(self) -> None:
+        with patch.dict(os.environ, {"CHIPS_BASH": str(self.tmp / "neni.exe")}), \
+             patch.object(os, "name", "posix"), \
+             patch.object(shutil, "which", return_value="/usr/bin/bash"):
+            self.assertEqual(chip_gate.najdi_bash(), "/usr/bin/bash")
+
+    def test_na_windows_bere_bash_vedle_gitu(self) -> None:
+        git_exe = self.tmp / "Git" / "cmd" / "git.exe"
+        bash_exe = self.tmp / "Git" / "bin" / "bash.exe"
+        for f in (git_exe, bash_exe):
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("", encoding="utf-8")
+
+        def which(jmeno: str):
+            return str(git_exe) if jmeno == "git" else r"C:\Windows\System32\bash.exe"
+
+        with patch.dict(os.environ, {"CHIPS_BASH": ""}), patch.object(os, "name", "nt"), \
+             patch.object(shutil, "which", side_effect=which):
+            self.assertEqual(Path(chip_gate.najdi_bash()).resolve(), bash_exe.resolve())
+
+    def test_system32_bash_je_wsl_a_nebere_se(self) -> None:
+        with patch.dict(os.environ, {"CHIPS_BASH": ""}), patch.object(os, "name", "nt"), \
+             patch.object(shutil, "which",
+                          side_effect=lambda j: None if j == "git"
+                          else r"C:\Windows\System32\bash.exe"):
+            self.assertIsNone(chip_gate.najdi_bash())
+
+    def test_jiny_bash_na_path_se_bere(self) -> None:
+        with patch.dict(os.environ, {"CHIPS_BASH": ""}), patch.object(os, "name", "nt"), \
+             patch.object(shutil, "which",
+                          side_effect=lambda j: None if j == "git" else r"C:\msys\bin\bash.exe"):
+            self.assertEqual(chip_gate.najdi_bash(), r"C:\msys\bin\bash.exe")
+
+    def test_mimo_windows_rozhoduje_path(self) -> None:
+        with patch.dict(os.environ, {"CHIPS_BASH": ""}), patch.object(os, "name", "posix"), \
+             patch.object(shutil, "which", return_value=None):
+            self.assertIsNone(chip_gate.najdi_bash())
+
+
 if __name__ == "__main__":
     unittest.main()
 

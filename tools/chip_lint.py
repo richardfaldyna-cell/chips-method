@@ -29,6 +29,7 @@ Návratový kód 1 = nález (vhodné do hooku / CI).
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Callable, NamedTuple
@@ -229,8 +230,48 @@ def ma_commity(koren: Path) -> bool:
     return any(r.strip() and not r.startswith(("#", "^")) for r in radky)
 
 
-def zkontroluj_cesty(c) -> tuple[list[str], list[str]]:
+def soubory_v_head(koren: Path) -> set[str] | None:
+    """Cesty commitnuté v HEAD git stromu `koren` (posix, relativní), nebo None.
+
+    None znamená „git to neumí říct": není to git strom, nemá commit, git není
+    na PATH, nebo `koren` není kořenem svého stromu (`ls-tree` vypisuje od
+    kořene, nároky by se porovnávaly proti špatnému prefixu). Volající pak
+    padá na pracovní strom, přesně jako před chipem 36. `-z` proto, že
+    `ls-tree` jinak cesty s diakritikou obaluje uvozovkami.
+    """
+    if git_koren(koren) != koren.resolve():
+        return None
+    try:
+        p = subprocess.run(["git", "-C", str(koren), "ls-tree", "-r", "-z",
+                            "--name-only", "--full-tree", "HEAD"],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if p.returncode != 0:
+        return None
+    return {s for s in p.stdout.split("\0") if s}
+
+
+def v_head(soubory: set[str], cesta: str) -> bool:
+    """Je `cesta` (soubor, nebo adresář s čímkoli pod sebou) v HEAD?"""
+    cesta = cesta.replace("\\", "/").strip("/")
+    return cesta in soubory or any(s.startswith(cesta + "/") for s in soubory)
+
+
+def zkontroluj_cesty(c, head: dict | None = None) -> tuple[list[str], list[str]]:
     """Nárok na soubor, který v repu není, je fikce — a lint by ji jinak odkýval.
+
+    Existence se posuzuje proti **HEAD**, ne proti pracovnímu stromu, všude,
+    kde git umí odpovědět (chip 36): worktree chipu větví z HEAD, takže soubor,
+    který v hlavním stromě leží jen netrackovaný nebo ve stage, pro chip
+    neexistuje. Nárok `# nový` na takový soubor je tedy správný a nevaruje,
+    nárok bez `# nový` na něj je chyba s vypsanou opravou. Kde git odpovědět
+    neumí (bez repa, bez commitu, `repo:` není kořen stromu), rozhoduje
+    pracovní strom jako dřív. Vzory se dál rozbalují z disku.
+
+    `head` je volitelná cache na jeden běh `{strom: množina | None}`, aby se
+    lint ptal gitu jednou na strom, ne jednou na chip.
 
     Kontroluje se jen u stavu 'ready' (brief hotový, chip ještě neběžel). Za běhu
     je strom rozpracovaný a mazání/přejmenování by hlásilo falešné nálezy;
@@ -268,6 +309,12 @@ def zkontroluj_cesty(c) -> tuple[list[str], list[str]]:
     # nároků se ověřuje proti stromu, ve kterém brief opravdu leží — viz N2.
     repo = strom_ke_kontrole(c) or repo
 
+    if head is None:
+        head = {}
+    if repo not in head:
+        head[repo] = None if greenfield else soubory_v_head(repo)
+    v_commitu = head[repo]
+
     chyby: list[str] = []
     for cesta, novy in c.soubory_detail():
         p = PurePosixPath(cesta.replace("\\", "/"))
@@ -280,6 +327,22 @@ def zkontroluj_cesty(c) -> tuple[list[str], list[str]]:
         if vzor(cesta):
             if not any(repo.glob(cesta)):
                 chyby.append(f"{jm}: vzor '{cesta}' v repu nic nenajde")
+            continue
+        if v_commitu is not None:
+            if v_head(v_commitu, cesta):
+                if novy:
+                    varovani.append(f"{jm}: '{cesta}' je označená '# nový', ale v HEAD "
+                                    f"už existuje — brief je nejspíš zastaralý")
+            elif not novy:
+                if (repo / cesta).exists():
+                    chyby.append(f"{jm}: nárokovaná cesta '{cesta}' existuje jen "
+                                 f"v pracovním stromu, ne v HEAD — worktree chipu "
+                                 f"větví z HEAD a neuvidí ji; nejdřív ji commitni, "
+                                 f"nebo za ni napiš '# nový', pokud ji chip teprve vytvoří")
+                else:
+                    chyby.append(f"{jm}: nárokovaná cesta '{cesta}' v repu neexistuje "
+                                 f"(překlep? pokud ji chip teprve vytvoří, napiš za ni "
+                                 f"'# nový')")
             continue
         if (repo / cesta).exists():
             if novy:
@@ -453,6 +516,27 @@ def naroky(c) -> list[tuple[str, str]]:
     return out
 
 
+def kotva(c) -> str:
+    """Kotva nároků chipu: jeho `repo:` jako posix cesta, '' bez `repo:`.
+
+    Nároky jsou relativní k `repo:`, takže dva chipy smí oba nárokovat
+    `README.md` a myslet dva různé soubory — jeden adresář briefů může řídit
+    víc repozitářů (`--dir` nad vnořenými repy; chip 36 tak našel 103 falešných
+    kolizí). Porovnání `<repo>/<nárok>` místo holého nároku to drží od sebe
+    a pořád chytí týž soubor dosažený přes dvě repa: `sub/README.md`
+    v rodičovském repu a `README.md` ve vnořeném repu `sub/` jsou jedna cesta.
+    """
+    repo = c.repo_path()
+    return repo.as_posix().rstrip("/") if repo is not None else ""
+
+
+def ukotvi(kotva_repa: str, cesta: str) -> str:
+    """`<repo>/<nárok>`; absolutní nárok se nechá být (chybu hlásí jinde)."""
+    if not kotva_repa or absolutni(cesta):
+        return cesta
+    return f"{kotva_repa}/{cesta.replace(chr(92), '/').lstrip('/')}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Lint chip briefů.")
     ap.add_argument("--ready", action="store_true",
@@ -471,6 +555,7 @@ def main() -> int:
 
     chyby: list[str] = []
     varovani: list[str] = []
+    head: dict = {}          # jeden `git ls-tree` na strom za celý běh
 
     # 1 + 2 — jednotlivé chipy
     for c in chipy:
@@ -491,7 +576,7 @@ def main() -> int:
             varovani.extend(zbyle_placeholdery(c))
 
         if c.stav in ("ready", "running", "gated"):
-            e, v = zkontroluj_cesty(c)
+            e, v = zkontroluj_cesty(c, head)
             chyby.extend(e)
             varovani.extend(v)
 
@@ -544,17 +629,21 @@ def main() -> int:
 
     aktivni = [c for c in chipy if c.stav in ("ready", "running", "gated")]
     naroceno = {c.path.name: naroky(c) for c in aktivni}   # vzory rozbalené jednou, ne v O(n²)
+    kotvy = {c.path.name: kotva(c) for c in aktivni}
     for i, a in enumerate(aktivni):
         for b in aktivni[i + 1:]:
             # Chipy ve vztahu předek–potomek NIKDY neběží současně → překryv je v pořádku.
             if b.id in predci(a.id) or a.id in predci(b.id):
                 continue
+            ka, kb = kotvy[a.path.name], kotvy[b.path.name]
             # Hlásí se dvojice nároků z briefu (to se edituje), konkrétní soubor
             # je jen důkaz — jinak jedna kolize vypíše tři skoro stejné řádky.
+            # Porovnává se ukotveně k `repo:` každého chipu (viz `kotva`),
+            # hlásí se tak, jak je to v briefu napsané.
             kolize: dict[tuple[str, str], tuple[str, bool]] = {}
             for x, ox in naroceno[a.path.name]:
                 for y, oy in naroceno[b.path.name]:
-                    if not prekryv(x, y):
+                    if not prekryv(ukotvi(ka, x), ukotvi(kb, y)):
                         continue
                     presny = not vzor(x) and not vzor(y)
                     if (ox, oy) not in kolize or (presny and not kolize[(ox, oy)][1]):
@@ -563,6 +652,8 @@ def main() -> int:
                 popis = ox if ox == oy else f"{ox}  ×  {oy}"
                 if dukaz != popis.replace("  ×  ", " × "):
                     popis += f"   (např. {dukaz})"
+                if ka != kb:
+                    popis += f"   (týž soubor přes dvě repa: {ka} a {kb})"
                 chyby.append(f"KOLIZE {a.path.name} ↔ {b.path.name}: {popis}")
 
     # výstup
