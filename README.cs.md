@@ -231,7 +231,7 @@ Metodika je ověřená **dvěma pilotními běhy a jednou opravnou vlnou**.
 
 | ukazatel | výsledek |
 |---|---|
-| chipy celkem | 27/27 merged, 0 `blocked` |
+| chipy celkem | 28/28 merged, 0 `blocked` |
 | testy | 0 → **815** |
 | zásahy mimo nárokované soubory | 0 |
 | konflikty při merge | 0 (jednou zaviněné nástrojem, ne chipem) |
