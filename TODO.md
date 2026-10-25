@@ -1,5 +1,16 @@
 # TODO — CHIPS
 
+## Veřejné vydání
+
+- [x] **Chipy 33–35 portovány z vývojového repa (2026-10-25):** review smyčka
+      (`chip_install.py`, `integrations/claude-code/`), nasazení jedním příkazem
+      (`chip_init.py`), rozpočet času brány (`--budget`, `.claude/settings.json`).
+      Vývojové repo má navíc vlnu 26–32 (anglické rozhraní nástrojů, `pyproject.toml`,
+      `docs/install.md`, CI) — ta se **nevydává**; co se portuje, se přepisuje na
+      české rozhraní tohoto repa.
+- [ ] Rozhodnout, jestli vlnu 26–32 někdy vydat celou, nebo veřejnou verzi nechat
+      trvale na českém rozhraní s anglickými novými nástroji.
+
 ## Další krok
 
 - [x] **Absolutní `worktree:` chápou `chip_run` a brána opačně** — vyřešeno

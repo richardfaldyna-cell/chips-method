@@ -448,6 +448,66 @@ what the agent wrote in its summary. In wave 6 the difference was 37 ticked<br /
 issues and five states.</p>
 <p><strong>When the gate fails, the chip doesn't end in a merge but in an open PR.</strong><br />
 That is the whole difference between "autonomous" and "unsupervised".</p>
+<h3 id="the-review-loop-after-a-green-gate-before-the-merge">The review loop: after a green gate, before the merge</h3>
+<p>A green gate proves the chip's own tests pass. It does not prove those tests<br />
+would notice a broken chip — they were written by the same model as the code<br />
+(see the reviewer role in section 9). The review loop is the optional step that<br />
+checks exactly that, with two roles that did not write the code:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Sees</th>
+<th>May</th>
+<th>Must not</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>critic</strong></td>
+<td>the brief, the diff, the evidence from <code>chip_review.py</code></td>
+<td>run the gate and the tests, break code temporarily to see whether a test fails (mutation), report findings with a <code>file:line</code> citation</td>
+<td>fix anything, leave the worktree changed, commit, merge, touch the brief</td>
+</tr>
+<tr>
+<td><strong>judge</strong></td>
+<td>the same plus the critic's findings</td>
+<td>open every cited place and accept or reject the finding, return one verdict</td>
+<td>add findings of its own, run commands, write files, decide the merge</td>
+</tr>
+</tbody>
+</table>
+<p>Findings are graded <strong>against the brief, not against taste</strong>:</p>
+<ul>
+<li><strong>A</strong> — the chip is wrong against its own brief: a ticked DoD item that is not<br />
+  true, a ticked issue without code, a test that survives a mutation, a file<br />
+  outside the claim, a T3 item decided instead of escalated.</li>
+<li><strong>B</strong> — the brief is met but not defended: a DoD item nothing verifies, an<br />
+  unhandled input the issues imply, an error swallowed with exit 0.</li>
+<li><strong>C</strong> — everything else. C never blocks; it is queued for <strong>one</strong> follow-up<br />
+  chip, because working through review findings one at a time is where the<br />
+  return falls off (section 9).</li>
+</ul>
+<p>The judge returns exactly one verdict: <code>COMPLETE</code> (no accepted A or B — the chip<br />
+goes on to the gate and the merge), <code>CONTINUE</code> (accepted A/B fixable inside the<br />
+claim — fix them, commit, green gate, next round), <code>ESCALATE</code> (a human decision<br />
+is needed) or <code>IMPOSSIBLE</code> (the brief contradicts itself). The caps are<br />
+mechanical, not left to the judge's mood: <strong>at most 3 rounds</strong>, the same HEAD as<br />
+the previous round means no progress, a finding accepted twice means the fix is<br />
+not working, a file outside the claim skips the critic altogether. After the<br />
+critic, <code>git status --porcelain</code> in the worktree must be empty — a mutation left<br />
+behind would otherwise be merged as a fix.</p>
+<p><strong>This is not the vote that section 6 rejects.</strong> The judge does not replace a<br />
+decision or a test; it filters the critic's claims against the code, so that an<br />
+unfounded finding does not turn into work. Every accepted finding ends as a<br />
+code change <em>with a test that fails without it</em>, and the merge is still decided<br />
+by the gate, the hook and you. A verdict of <code>ESCALATE</code> is the loop doing its job,<br />
+not failing at it.</p>
+<p><strong>When not to run it.</strong> A chip whose DoD is a byte comparison or a grep<br />
+(documentation, generated files) gains little; the gate already measures the<br />
+whole behaviour. One round costs roughly 150–200 thousand tokens (critic plus<br />
+judge), about twice a chip. Spend it on chips that change logic.</p>
+<p>How to install and call it: the README, section "The review loop".</p>
 <hr />
 <h2 id="5-definition-of-done">5. Definition of done</h2>
 <p>It must be verifiable by a command, not by an opinion. The test:</p>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIPS review loop</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>name: chip-review-loop<br />
+description: Independent review loop for one finished CHIPS chip - machine evidence from chip_review.py, then a fresh chip-critic subagent, then a fresh chip-judge subagent, repeated for at most 3 rounds until the judge says COMPLETE, CONTINUE runs out or a human decision is needed. Use when the user says "/chip-review-loop NN", "review chip NN", "pust na chip critica a judge", or a chip is gated and should be reviewed before its merge. It never merges and never switches a brief's status.</p>
+<hr />
+<h1 id="chips-review-loop">CHIPS review loop</h1>
+<p>Tools of this CHIPS clone: <code>{{CHIPS_TOOLS}}</code><br />
+(if the line above shows a placeholder in double curly braces instead of a path, this file<br />
+was not installed by <code>chip_install.py</code> - use the <code>tools/</code> directory of the CHIPS repo instead).</p>
+<p>Invocation: <code>/chip-review-loop NN [--dir &lt;briefs dir&gt;] [--max-rounds N]</code> (default 3, never more<br />
+than 3 without the user saying so). <code>--dir</code> is needed whenever the briefs are not in <code>./chips</code><br />
+of the current repo; pass the same <code>--dir</code> to every CHIPS tool below.</p>
+<p>The loop decides one thing: whether a chip goes back for fixes. The merge stays with the gate,<br />
+the PreToolUse hook and the human. Nothing in this skill merges, pushes, switches <code>stav:</code> in<br />
+a brief, or touches a file outside the chip's claim.</p>
+<h2 id="0-resolve-and-check-preconditions">0. Resolve and check preconditions</h2>
+<ol>
+<li><code>python {{CHIPS_TOOLS}}/chip_run.py NN --dry-run [--dir D]</code> - read the worktree path and the<br />
+   branch from the printed assignment. The brief path is printed there too.</li>
+<li>The worktree must exist and be committed: <code>git -C &lt;worktree&gt; status --porcelain</code> prints<br />
+   nothing. Otherwise stop: the review would measure a state that is not the one being merged.</li>
+<li><code>python {{CHIPS_TOOLS}}/chip_gate.py NN [--dir D]</code> must be green. A red gate is not a review<br />
+   question - stop and report it; the chip fixes the gate first.</li>
+<li><code>base</code> = <code>git -C &lt;worktree&gt; merge-base HEAD &lt;main branch&gt;</code>, where the main branch is the<br />
+   branch checked out in the chip's <code>repo:</code> (<code>git -C &lt;repo&gt; rev-parse --abbrev-ref HEAD</code>).</li>
+</ol>
+<h2 id="1-run-directory-outside-the-repo-survives-cleanup">1. Run directory (outside the repo, survives cleanup)</h2>
+<p><code>&lt;common&gt;</code> = <code>git -C &lt;worktree&gt; rev-parse --path-format=absolute --git-common-dir</code>.<br />
+Run directory: <code>&lt;common&gt;/chips-review/NN/</code>. It is inside <code>.git</code>, so it is never committed and<br />
+survives <code>chip_run.py --uklid</code>. The round number K = number of existing <code>round-*-judge.json</code><br />
+files + 1, so an interrupted loop resumes where it stopped. Write <code>history</code> from those files.</p>
+<h2 id="2-one-round">2. One round</h2>
+<ol>
+<li><strong>Evidence:</strong> <code>python {{CHIPS_TOOLS}}/chip_review.py NN --repo &lt;worktree&gt; --commit &lt;base&gt;..HEAD [--dir D]</code><br />
+   -&gt; save the full output to <code>round-K-evidence.txt</code>. If it exits 1 (a file outside the claim -<br />
+   the one hard rule it enforces), do not call the critic: verdict ESCALATE, go to step 4.</li>
+<li><strong>Critic:</strong> start a fresh subagent <code>chip-critic</code> (if that agent type is missing, a<br />
+   general-purpose subagent with the full text of <code>chip-critic.md</code> as its instructions). Give it<br />
+   only: <code>brief</code>, <code>worktree</code>, <code>base</code>, <code>evidence</code> (the file path), <code>previous_findings</code> (path of<br />
+<code>round-(K-1)-critic.json</code> or "none"). Never your own opinion of the chip. Save its JSON to<br />
+<code>round-K-critic.json</code>.</li>
+<li><strong>Clean-tree check (machine, not trust):</strong> <code>git -C &lt;worktree&gt; status --porcelain</code> must print<br />
+   nothing and <code>git -C &lt;worktree&gt; rev-parse HEAD</code> must equal the HEAD from before the critic.<br />
+   If not, restore with <code>git -C &lt;worktree&gt; checkout -- .</code> only when every changed path is a<br />
+   tracked file the critic mutated; otherwise stop and ask the user. Record <code>worktree_clean: false</code><br />
+   for the judge either way.</li>
+<li><strong>Judge:</strong> start a fresh subagent <code>chip-judge</code> (fallback as above). Give it <code>brief</code>, <code>worktree</code>,<br />
+<code>base</code>, <code>evidence</code>, <code>critic</code> (the JSON path), <code>round</code> = K, <code>max_rounds</code>, <code>history</code>. Save its<br />
+   JSON to <code>round-K-judge.json</code>.</li>
+<li><strong>Queue:</strong> append the judge's <code>queue</code> items (class C) to <code>&lt;common&gt;/chips-review/NN/queue.md</code>.</li>
+</ol>
+<h2 id="3-act-on-the-verdict">3. Act on the verdict</h2>
+<ul>
+<li><strong>COMPLETE</strong> - report: chip NN passed review in K rounds; it is ready for<br />
+<code>chip_gate.py NN</code> and the merge by the orchestrator. Do not merge.</li>
+<li><strong>CONTINUE</strong> - the accepted A/B findings (verbatim, nothing else) go to whoever owns the chip:<br />
+  its own session in the worktree, or you when the user asked you to fix it. Fixes stay inside<br />
+  the claim, add or change a test that fails without the fix, end with a commit, and the gate<br />
+  must be green again. Then run the next round. Do not fix rejected findings or the queue.</li>
+<li><strong>ESCALATE / IMPOSSIBLE</strong> - stop. Tell the user the judge's reason and <code>escalate_to_human</code><br />
+  in one or two sentences each. Suggest the orchestrator set the brief to <code>blocked</code>; do not set<br />
+  it yourself.</li>
+</ul>
+<h2 id="4-caps-stop-conditions-enforced-by-you-not-by-the-judge-alone">4. Caps (stop conditions, enforced by you, not by the judge alone)</h2>
+<ul>
+<li>at most <code>max_rounds</code> rounds (default 3)</li>
+<li>the worktree HEAD equals the previous round's -&gt; ESCALATE (no progress)</li>
+<li>a finding accepted in an earlier round comes back in the critic's <code>previous</code> list with status<br />
+<code>persists</code> or <code>regressed</code> -&gt; ESCALATE (ids are never reused, so check the status, not the id)</li>
+<li><code>chip_review.py</code> exits 1 -&gt; ESCALATE without a critic</li>
+<li>each subagent gets a turn cap in its prompt: at most 20 turns</li>
+</ul>
+<h2 id="5-log-and-report">5. Log and report</h2>
+<p>During the loop, append one line per round to <code>&lt;common&gt;/chips-review/NN/log.md</code>, never to the<br />
+brief: an uncommitted edit of a tracked file would fail the next clean-tree check.<br />
+<code>review round K: critic N A / M B / P C, judge &lt;verdict&gt;, accepted &lt;ids&gt;</code>.<br />
+When the loop ends (any verdict), add <strong>one</strong> row summing up the rounds to the Log of the brief<br />
+in the worktree (the chip's mandate; <code>stav:</code> unchanged) and commit it on its own:<br />
+<code>git -C &lt;worktree&gt; commit -m "chip NN: Log - review &lt;verdict&gt;" -- &lt;brief&gt;</code>. The worktree is clean<br />
+again, which the gate and the merge hook require.<br />
+Finish with a short report to the user: verdict, rounds, accepted and rejected findings, and<br />
+where the queue for a follow-up chip is.</p>
+<div class="doc-foot">Vygenerováno z <code>SKILL.md</code> &middot; CHIPS review loop</div>
+</body>
+</html>

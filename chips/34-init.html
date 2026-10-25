@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 34<br />
+nazev: init<br />
+stav: merged</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<p>zavisi_na: 33<br />
+repo: ..<br />
+greenfield: ne<br />
+vetev: ai/chip-34/init<br />
+worktree: ../CHIPS-chip-34</p>
+<hr />
+<h1 id="chip-34-init-nasazeni-metody-do-repa-jednim-prikazem">CHIP 34 — init: nasazení metody do repa jedním příkazem</h1>
+<p>Nasazení CHIPS do cizího repa jsou dnes čtyři ruční kroky (složka briefů,<br />
+registrace hooku se správnou cestou, review smyčka, ověření hooku oběma směry).<br />
+Krok, na který se zapomíná, je právě ten, bez kterého je metoda jen próza.<br />
+Chip z nich dělá <code>python tools/chip_init.py &lt;repo&gt;</code>.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>tools/chip_init.py &lt;repo&gt;</code>: ověří, že <code>&lt;repo&gt;</code> je git repo (jinak<br />
+      exit 1, nic nezapíše)</li>
+<li>[x] #2 — založí <code>&lt;repo&gt;/chips/</code> (když chybí); nic v ní nepřepisuje</li>
+<li>[x] #3 — zaregistruje hook do <code>&lt;repo&gt;/.claude/settings.json</code>: <code>PreToolUse</code>,<br />
+      matcher <code>Bash|PowerShell</code>, <code>shell: bash</code>, cesta<br />
+<code>$CLAUDE_PROJECT_DIR/&lt;relativní cesta k tools/hook_chip_gate.py&gt;</code> —<br />
+      relativní, aby fungovala na všech strojích se stejným rozložením</li>
+<li>[x] #4 — existující <code>settings.json</code> sloučí: zachová všechny klíče a ostatní<br />
+      hooky; když už hook s <code>hook_chip_gate.py</code> je, nepřidá druhý; neplatný<br />
+      JSON → exit 1, soubor beze změny</li>
+<li>[x] #5 — <code>--global</code>: registrace do <code>~/.claude/settings.json</code> s absolutní<br />
+      cestou (pro sessions s jiným kořenem); když repo leží na jiném disku než<br />
+      CHIPS a relativní cesta nejde → použije absolutní a varuje</li>
+<li>[x] #6 — <code>--hook-timeout N</code> (výchozí 600 s): plná brána může trvat déle než<br />
+      300 s (CHIPS sám 2026-10-16: ~360 s)</li>
+<li>[x] #7 — nainstaluje review smyčku (<code>chip_install.install</code>) do <code>~/.claude</code>;<br />
+<code>--no-review</code> krok vynechá</li>
+<li>[x] #8 — samotest hooku nad cílovým repem: větev <code>ai/chip-99/does-not-exist</code><br />
+      musí dostat <code>deny</code>, obyčejná větev nesmí; když (a) neprojde → exit 1<br />
+      s hláškou</li>
+<li>[x] #9 — <code>--check</code>: nic nezapisuje, vypíše stav všech kroků, exit 1 když<br />
+      cokoli chybí</li>
+<li>[x] #10 — idempotence: druhé spuštění nic nezmění (stejné bajty<br />
+<code>settings.json</code>), exit 0</li>
+<li>[x] #11 — závěr: vypíše další krok (<code>chip_new.py 01 &lt;nazev&gt; --repo &lt;repo&gt;
+      --dir &lt;repo&gt;/chips</code>) a že živé ověření v session je<br />
+<code>git merge ai/chip-99/does-not-exist</code> po restartu</li>
+<li>[x] #12 — <code>tests/test_chip_init.py</code> pokrývá #1–#10 na dočasných repech</li>
+<li>[x] #13 — <code>README.md</code> + <code>README.cs.md</code>: nasazení jedním příkazem nahoře<br />
+      v rychlém startu, ruční registrace hooku zůstává jako vysvětlení</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_init.py          # nový
+tests/test_chip_init.py     # nový
+README.md
+README.cs.md
+</code></pre>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> zelené, počet = výchozí stav<ul>
+<li>nové testy z <code>test_chip_init.py</code></li>
+</ul>
+</li>
+<li>[x] na čerstvém dočasném git repu: <code>chip_init.py &lt;tmp&gt; --no-review</code> exit 0,<br />
+      vznikne <code>chips/</code> a <code>.claude/settings.json</code>, jehož cesta k hooku po<br />
+      dosazení <code>&lt;tmp&gt;</code> za <code>$CLAUDE_PROJECT_DIR</code> ukazuje na existující<br />
+<code>tools/hook_chip_gate.py</code></li>
+<li>[x] druhé spuštění: exit 0 a SHA-256 <code>settings.json</code> stejné</li>
+<li>[x] <code>settings.json</code> s klíčem <code>permissions</code> a cizím hookem: po init oba<br />
+      zůstanou, hook CHIPS přibude jednou</li>
+<li>[x] neplatný JSON v <code>settings.json</code>: exit 1, SHA beze změny</li>
+<li>[x] <code>--check</code> na čerstvém repu: exit 1, žádný soubor nevznikne</li>
+<li>[x] samotest: hook na <code>ai/chip-99/does-not-exist</code> vrátí <code>deny</code> (test volá<br />
+      skutečný <code>hook_chip_gate.py</code> přes subprocess)</li>
+<li>[x] strength test: kopie <code>chip_init.py</code>, která settings přepíše místo<br />
+      sloučení, spadne aspoň v jednom testu</li>
+<li>[x] <code>python tools/chip_lint.py</code> exit 0; <code>python tools/chip_init.py --help</code><br />
+      exit 0</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests
+python tools/chip_lint.py
+python tools/chip_init.py --help
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna <code>hook_chip_gate.py</code>, <code>chip_gate.py</code> nebo <code>.claude/settings.json</code><br />
+  CHIPSu samotného</li>
+<li>zápis mimo <code>&lt;repo&gt;/chips/</code>, <code>&lt;repo&gt;/.claude/settings.json</code>,<br />
+<code>~/.claude/settings.json</code> (jen s <code>--global</code>) a cíle review smyčky</li>
+<li>mazání čehokoli, přepis existujícího hooku jiného nástroje</li>
+<li>nová závislost</li>
+<li>soubor mimo „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Nový kód anglicky, uživatelský povrch anglicky (repo je veřejné), bez<br />
+  domovské cesty autora v trackovaných souborech.</li>
+<li>Hook čte JSON ze stdin (<code>tool_input.command</code>, <code>cwd</code>) a odmítnutí vrací jako<br />
+<code>hookSpecificOutput.permissionDecision = "deny"</code>.</li>
+<li>Soukromý projekt mimo tento repo má hook registrovaný ručně s cestou<br />
+<code>$CLAUDE_PROJECT_DIR/../../../CHIPS/tools/hook_chip_gate.py</code> — přesně tvar,<br />
+  který má init vyrobit.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-10-16</td>
+<td>draft</td>
+<td>založeno</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>ready</td>
+<td>brief vyplněn; uživatel chce „jeden příkaz k nasazení metody"</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>gated</td>
+<td><code>tools/chip_init.py</code> (4 kroky: <code>chips/</code>, hook do <code>.claude/settings.json</code> s cestou relativní k <code>$CLAUDE_PROJECT_DIR</code> a sloučením, review smyčka přes <code>chip_install</code>, samotest skutečného hooku oběma směry) + 19 testů. <strong>Brána zelená</strong> ve vývojovém repu (849 testů, lint 0 chyb, <code>--help</code> exit 0). Kouřový test na čerstvém repu: vše ok včetně samotestu. <strong>Důkaz síly:</strong> init, který settings přepíše místo sloučení → 2 testy červené. <strong>Nález během práce:</strong> <code>registered()</code> padal s AttributeError na <code>hooks</code> jiného typu než objekt → odolný vůči tvaru, odmítnutí řeší <code>with_hook</code> (test).</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>merged</td>
+<td><code>chip_gate.py 34</code> ZELENÁ, sloučeno <code>--no-ff</code>, worktree uklizen. Živé ověření: <code>chip_init.py --check</code> nad ručně nasazeným soukromým projektem = 4/4 ok (<code>chips/</code>, hook, review smyčka, samotest).</td>
+</tr>
+<tr>
+<td>2026-10-25</td>
+<td>merged</td>
+<td><strong>Port do veřejného repa <code>chips-method</code>.</strong> Nástroj a testy převzaté beze změny; místo <code>docs/install.md</code> (ve veřejné verzi není) odkazuje docstring na README. Počty testů v řádcích výše platí pro vývojové repo.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>34-init.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>
