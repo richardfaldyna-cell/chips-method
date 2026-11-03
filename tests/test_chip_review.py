@@ -136,7 +136,7 @@ class Zaklad(unittest.TestCase):
 
     def setUp(self) -> None:
         self.puvodni_dir = chip_common.CHIPS_DIR
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.repo = self.tmp / "repo"
         self.chips = self.repo / "chips"
         (self.repo / "tools").mkdir(parents=True)

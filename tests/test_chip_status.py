@@ -63,7 +63,7 @@ class Zaklad(unittest.TestCase):
     """Dočasný adresář s briefy + návrat globálního CHIPS_DIR do původního stavu."""
 
     def setUp(self) -> None:
-        self.dir = Path(tempfile.mkdtemp(prefix="chip-status-test-"))
+        self.dir = Path(tempfile.mkdtemp(prefix="chip-status-test-")).resolve()
         self.addCleanup(shutil.rmtree, self.dir, True)
         puvodni = chip_common.CHIPS_DIR
         self.addCleanup(chip_common.nastav_chips_dir, puvodni)

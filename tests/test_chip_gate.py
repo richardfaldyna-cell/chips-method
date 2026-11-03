@@ -92,7 +92,7 @@ class Zaklad(unittest.TestCase):
 
     def setUp(self) -> None:
         self.puvodni_dir = chip_common.CHIPS_DIR
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.repo = self.tmp / "repo"
         self.chips = self.repo / "chips"
         self.chips.mkdir(parents=True)
@@ -672,11 +672,13 @@ class TestNajdiBash(Zaklad):
             self.assertEqual(chip_gate.najdi_bash(), str(muj))
 
     def test_neexistujici_chips_bash_se_ignoruje(self) -> None:
+        # `os.name` se tu nepatchuje: pathlib si podle něj vybírá třídu cesty
+        # a na cizí platformě (Linux s "nt", Windows s "posix") odmítne vzniknout.
         with patch.dict(os.environ, {"CHIPS_BASH": str(self.tmp / "neni.exe")}), \
-             patch.object(os, "name", "posix"), \
              patch.object(shutil, "which", return_value="/usr/bin/bash"):
             self.assertEqual(chip_gate.najdi_bash(), "/usr/bin/bash")
 
+    @unittest.skipUnless(os.name == "nt", "Git for Windows a jeho bash existují jen na Windows")
     def test_na_windows_bere_bash_vedle_gitu(self) -> None:
         git_exe = self.tmp / "Git" / "cmd" / "git.exe"
         bash_exe = self.tmp / "Git" / "bin" / "bash.exe"

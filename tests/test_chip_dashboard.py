@@ -419,7 +419,7 @@ class ZakladRepo(unittest.TestCase):
             raise unittest.SkipTest("git není na PATH")
 
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="chip-dashboard-test-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="chip-dashboard-test-")).resolve()
         self.addCleanup(uklid, self.tmp)
         self.addCleanup(chip_common.nastav_chips_dir, chip_common.CHIPS_DIR)
         self.repo = self.tmp / "repo"
