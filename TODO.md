@@ -8,6 +8,12 @@
       Vývojové repo má navíc vlnu 26–32 (anglické rozhraní nástrojů, `pyproject.toml`,
       `docs/install.md`, CI) — ta se **nevydává**; co se portuje, se přepisuje na
       české rozhraní tohoto repa.
+- [x] **Chip 36 portován z vývojového repa (2026-10-25):** nástroje nad jedním
+      adresářem briefů pro víc (vnořených) repozitářů a nad Windows shellem —
+      kolize ukotvené k `repo:`, shell brány podle tagu bloku, review celé větve,
+      existence nároků proti HEAD, worktree mimo cizí git strom. Hlášky české,
+      `--uklid` místo `--cleanup`; 757 → 815 testů. Přidán CI workflow
+      (`.github/workflows/tests.yml`), na který už míří odznak vývojového README.
 - [ ] Rozhodnout, jestli vlnu 26–32 někdy vydat celou, nebo veřejnou verzi nechat
       trvale na českém rozhraní s anglickými novými nástroji.
 
@@ -24,6 +30,13 @@
       na Linuxu stejná sada běží ~5 s — nejdřív zjistit, co je na Windows
       pomalé (git subprocess, antivirus), než vznikne zkratka. Pouští se po každém
       mergi. Zvážit `--rychla` variantu pro merge a plnou jen na konci vlny.
+- [ ] **Časové testy brány (chip 35) jsou pod zátěží těsné.** `kill_tree` strom
+      procesů zabije (ověřeno 2026-10-25: 0 přeživších), ale samotný
+      `taskkill /F /T` tu trvá ~8 s, takže 2 s timeout + kill = 10–12 s proti
+      hranici 15 s v `test_timeout_zastavi_potomka_ne_jen_shell`
+      a `test_prikaz_delsi_nez_rozpocet_selze_vcas`. Při souběžném běhu dvou sad
+      spadly (19,8 s), samostatně projdou. Buď hranici odvodit od změřeného
+      `taskkill`, nebo zabíjet přes Job Object místo `taskkill`.
 - [ ] **Patří `.html` briefu agentovi, nebo orchestrátorovi?** Chip 23 ho
       schválně nepřegeneroval („`.html` k briefu není v Dotčených souborech,
       patří orchestrátorovi"), chip 25 ho přegeneroval sám. Obě čtení jsou

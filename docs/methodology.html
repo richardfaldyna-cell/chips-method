@@ -155,6 +155,17 @@ the repo. A claim on a non-existent file is either a typo or a stale brief —<b
 and in both cases the chip's slice is built on something that isn't there. The<br />
 <code># nový</code> (new) marker is the only exception and is deliberately explicit: you<br />
 have to write it, not rely on it.</p>
+<p>"Exists" means <strong>committed in HEAD</strong>, not lying in the working tree. The chip's<br />
+worktree branches from HEAD, so a file you created but have not committed is<br />
+not there for the chip: claiming it without <code># nový</code> is an error, claiming it<br />
+with <code># nový</code> is correct and raises no warning. This is the same rule as "commit<br />
+before <code>chip_run.py</code>", checked by the tool instead of remembered by you.</p>
+<p><strong>Claims are compared anchored to <code>repo:</code>.</strong> One brief directory may drive<br />
+several repositories (<code>--dir</code> over a project with nested repos), and<br />
+<code>README.md</code> in repo A is not <code>README.md</code> in repo B — the lint compares<br />
+<code>&lt;repo&gt;/&lt;claim&gt;</code>, not the bare claim. The same file reached through two repos<br />
+still collides: <code>sub/README.md</code> claimed in the parent repo and <code>README.md</code><br />
+claimed in the nested repo <code>sub/</code> are one path.</p>
 <blockquote>
 <p>A pattern also covers files that don't exist yet. <code>src/*.py</code> in one chip<br />
 therefore collides with <code>src/new.py  # nový</code> in another, even though that file<br />
@@ -236,6 +247,12 @@ the first.</p>
 </code></pre>
 <p>Every window works in its own folder, on its own branch, with its own index.<br />
 Merging happens at the end and git handles any conflict normally and visibly.</p>
+<p>The worktree lives <strong>outside every git tree</strong>. "Next to the repo"<br />
+(<code>worktree: ../repo-chip-01</code>) is the right default for a top-level repo and the<br />
+wrong one for a repo nested inside another: the worktree would land in the<br />
+parent repo as an untracked directory, one <code>git add -A</code> away from being<br />
+committed. <code>chip_run.py</code> refuses such a location and tells you what absolute<br />
+<code>worktree:</code> to write instead.</p>
 <p>Claude Code has <code>EnterWorktree</code> for this (for a session) and subagents take the<br />
 <code>isolation: "worktree"</code> parameter. <code>tools/chip_run.py</code> does it for you.</p>
 <p><strong>A dependent chip branches from its predecessor, not from HEAD.</strong> When chip B<br />
@@ -320,6 +337,13 @@ wrong has power.</p>
 python -m build              # build
 python smoke_test.py         # smoke test against real data
 </code></pre>
+<p>The commands run in the shell the fence tag declares: <code>```bash</code> in bash<br />
+(on Windows the Git Bash next to <code>git.exe</code>, <code>CHIPS_BASH</code> to override),<br />
+<code>```cmd</code> in cmd.exe, no tag in the system shell. The tag is the author's<br />
+declaration of the language, so it decides — before chip 36 every gate on<br />
+Windows ran in cmd.exe, where <code>a &amp;&amp; b || exit 1</code> means something else and often<br />
+still exits 0, a green gate that had checked nothing. A shell that is not<br />
+available fails the command; it never falls back to another one.</p>
 <p>Three levels of enforcement, weakest to strongest:</p>
 <table>
 <thead>
@@ -691,7 +715,10 @@ none of it, because everything was consistent <em>inside</em> the author's reaso
 <p>The <code>chip_review.py</code> tool does the mechanical part (the scope of changes<br />
 against the claim, tests without asserts, the DoD against the gate commands) and<br />
 <code>--zadani</code> (assignment) prints the brief for the agent. <strong>It gives no verdict</strong> —<br />
-it collects material.</p>
+it collects material. It measures <strong>the whole branch</strong> (<code>merge-base..HEAD</code><br />
+against the main line) and prints the range it used; a chip rarely ends in one<br />
+commit, and a review of the last fix alone is a review of the fix, not of the<br />
+chip.</p>
 <p><strong>Where to stop.</strong> The chain chip → review → chip → review → chip is serial by<br />
 nature and took over an hour. Each layer found something new, but the yield<br />
 falls: the third chip was already half just locking in correct behaviour. It is<br />

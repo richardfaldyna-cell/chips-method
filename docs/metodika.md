@@ -63,6 +63,19 @@ Nárok na neexistující soubor je buď překlep, nebo zastaralý brief — a v 
 případech je řez chipu postavený na něčem, co tam není. Značka `# nový` je
 jediná výjimka a je záměrně explicitní: musíš ji napsat, ne na ni spoléhat.
 
+„Existuje" znamená **commitnutý v HEAD**, ne ležící v pracovním stromu.
+Worktree chipu větví z HEAD, takže soubor, který jsi vytvořil, ale necommitnul,
+pro chip neexistuje: nárok na něj bez `# nový` je chyba, nárok s `# nový` je
+správný a nevaruje. Je to totéž pravidlo jako „commitni před `chip_run.py`",
+jen ho hlídá nástroj místo tvé paměti.
+
+**Nároky se porovnávají ukotvené k `repo:`.** Jeden adresář briefů smí řídit
+několik repozitářů (`--dir` nad projektem s vnořenými repy) a `README.md`
+v repu A není `README.md` v repu B — lint porovnává `<repo>/<nárok>`, ne holý
+nárok. Týž soubor dosažený přes dvě repa koliduje dál: `sub/README.md`
+nárokovaný v rodičovském repu a `README.md` nárokovaný ve vnořeném repu `sub/`
+jsou jedna cesta.
+
 > Vzor pokrývá i soubory, které teprve vzniknou. `src/*.py` v jednom chipu tedy
 > koliduje s `src/nove.py  # nový` v druhém, i když ten soubor zatím neexistuje.
 
@@ -131,6 +144,12 @@ git worktree add ../repo-chip-01 -b ai/chip-01/refaktor-parseru
 
 Každé okno pracuje ve své složce, na své větvi, s vlastním indexem. Merguje se
 až na konci a případný konflikt řeší git normálně a viditelně.
+
+Worktree leží **mimo každý git strom**. „Vedle repa" (`worktree:
+../repo-chip-01`) je správný výchozí tvar pro repo na nejvyšší úrovni a špatný
+pro repo vnořené do jiného: worktree by přistál v rodičovském repu jako
+netrackovaný adresář, jeden `git add -A` od commitu. `chip_run.py` takové
+umístění odmítne a řekne, jaký absolutní `worktree:` napsat místo něj.
 
 Claude Code na to má `EnterWorktree` (pro session) a subagenti parametr
 `isolation: "worktree"`. `tools/chip_run.py` to udělá za tebe.
@@ -204,6 +223,14 @@ pytest -q                    # testy
 python -m build              # build
 python smoke_test.py         # smoke test proti reálným datům
 ```
+
+Příkazy běží v shellu, který deklaruje tag bloku: ```` ```bash ```` v bashi
+(na Windows Git Bash vedle `git.exe`, přepsat jde přes `CHIPS_BASH`),
+```` ```cmd ```` v cmd.exe, bez tagu v systémovém shellu. Tag je autorovo
+prohlášení o jazyce, proto rozhoduje — před chipem 36 běžela každá brána na
+Windows v cmd.exe, kde `a && b || exit 1` znamená něco jiného a často přesto
+skončí 0: zelená brána, která nic neověřila. Shell, který není k dispozici,
+příkaz shodí; nikdy se nepadá na jiný.
 
 Tři úrovně vynucení, od nejslabší po nejsilnější:
 
@@ -461,7 +488,9 @@ autorovy úvahy konzistentní.
 
 Nástroj `chip_review.py` dělá strojovou část (rozsah změn proti nároku, testy
 bez assertů, DoD proti příkazům brány) a `--zadani` vypíše brief pro agenta.
-**Nedělá verdikt** — sbírá podklady.
+**Nedělá verdikt** — sbírá podklady. Měří **celou větev** (`merge-base..HEAD`
+proti hlavní linii) a vypíše použitý rozsah; chip zřídka končí jedním commitem
+a review samotné poslední opravy je review té opravy, ne chipu.
 
 **Kde přestat.** Řetěz chip → review → chip → review → chip je z principu
 sériový a trval přes hodinu. Každá vrstva našla něco nového, ale výnos klesá:

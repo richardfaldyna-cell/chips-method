@@ -1016,5 +1016,94 @@ class TestNavratoveKody(ZakladChipu):
         self.assertIn("očekává se 'ready'", out)
 
 
+
+
+class TestWorktreeVCizimStromu(ZakladChipu):
+    """Chip 36 — worktree nesmí vzniknout uvnitř jiného git stromu.
+
+    `worktree: ../x-chip-NN` znamená „vedle repa"; u repa vnořeného do jiného
+    repa je to UVNITŘ rodičovského repa, jako netrackovaný adresář jeden
+    `git add -A` od commitu (vnořené repo v home-labu, 2026-10-25).
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        if chip_run.git_koren(self.base) is not None:      # pragma: no cover
+            self.skipTest("dočasný adresář sám leží v git stromu")
+
+    def vnorene(self, worktree: str | None = None) -> tuple[Path, Path]:
+        """Repo vnořené do vnějšího git stromu; brief ukazuje na vnořené."""
+        outer = self.base / "outer"
+        inner = outer / "inner"
+        (outer / ".git").mkdir(parents=True)
+        (inner / ".git").mkdir(parents=True)
+        text = BRIEF.format(stav="ready", repo=f"repo: {inner.as_posix()}\n")
+        if worktree is not None:
+            text = text.replace("worktree: ../repo-chip-07", f"worktree: {worktree}")
+        self.brief.write_text(text, encoding="utf-8")
+        return outer, inner
+
+    def test_strom_nad_pozna_rodicovske_repo(self) -> None:
+        outer, _ = self.vnorene()
+        self.assertEqual(chip_run.strom_nad(outer / "inner-chip-07"), outer.resolve())
+        # adresář worktree ještě neexistuje — a nemusí ani jeho rodič
+        self.assertEqual(chip_run.strom_nad(outer / "neni" / "ani" / "wt"), outer.resolve())
+
+    def test_strom_nad_mimo_git_je_none(self) -> None:
+        self.assertIsNone(chip_run.strom_nad(self.base / "repo-chip-07"))
+
+    def test_worktree_do_rodicovskeho_repa_se_odmitne_pred_gitem(self) -> None:
+        outer, _ = self.vnorene()
+        with mock.patch.object(subprocess, "call", return_value=0) as volani:
+            rc, out = self.spust("07")
+        self.assertEqual(rc, 1, out)
+        volani.assert_not_called()
+        self.assertIn("uvnitř jiného git stromu", out)
+        self.assertIn("outer", out)
+
+    def test_hlaska_navrhne_absolutni_cestu_mimo_strom(self) -> None:
+        _, inner = self.vnorene()
+        with mock.patch.object(subprocess, "call", return_value=0):
+            _, out = self.spust("07")
+        self.assertIn("worktree:", out)
+        self.assertIn((self.base / "inner-chip-07").resolve().as_posix(), out)
+
+    def test_worktree_uvnitr_vlastniho_repa_se_odmitne(self) -> None:
+        self.vnorene(worktree=(self.base / "outer" / "inner" / "wt").as_posix())
+        with mock.patch.object(subprocess, "call", return_value=0) as volani:
+            rc, out = self.spust("07")
+        self.assertEqual(rc, 1, out)
+        volani.assert_not_called()
+        self.assertIn("vlastního repa", out)
+
+    def test_dry_run_odmitne_taky(self) -> None:
+        self.vnorene()
+        with mock.patch.object(subprocess, "call", return_value=0) as volani:
+            rc, out = self.spust("07", "--dry-run")
+        self.assertEqual(rc, 1, out)
+        volani.assert_not_called()
+
+    def test_absolutni_worktree_mimo_strom_projde(self) -> None:
+        self.vnorene(worktree=(self.base / "wt-07").as_posix())
+        with mock.patch.object(subprocess, "call", return_value=0) as volani:
+            rc, out = self.spust("07")
+        self.assertEqual(rc, 0, out)
+        volani.assert_called_once()
+
+    def test_uklid_vnoreneho_worktree_neni_blokovan(self) -> None:
+        self.vnorene()
+        with mock.patch.object(chip_run, "uklid", return_value=0) as u:
+            rc, _ = self.spust("07", "--uklid")
+        self.assertEqual(rc, 0)
+        u.assert_called_once()
+
+    def test_puvodni_rozlozeni_vedle_repa_mimo_git_projde(self) -> None:
+        """Výchozí `../repo-chip-NN` vedle repa na nejvyšší úrovni se nemění."""
+        with mock.patch.object(subprocess, "call", return_value=0) as volani:
+            rc, _ = self.spust("07")
+        self.assertEqual(rc, 0)
+        volani.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

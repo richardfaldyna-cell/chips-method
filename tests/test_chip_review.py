@@ -136,7 +136,7 @@ class Zaklad(unittest.TestCase):
 
     def setUp(self) -> None:
         self.puvodni_dir = chip_common.CHIPS_DIR
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp()).resolve()
         self.repo = self.tmp / "repo"
         self.chips = self.repo / "chips"
         (self.repo / "tools").mkdir(parents=True)
@@ -651,6 +651,97 @@ class TestMain(Zaklad):
         self.assertEqual(kod, 1)
         self.assertIn("MIMO NÁROK: tools/chip_gate.py", out.split("Nálezy")[1])
         self.assertNotIn("MIMO NÁROK", out.split("Otázky")[-1])
+
+
+
+
+class TestVychoziRozsah(Zaklad):
+    """Chip 36 — bez `--commit` review měří celou větev.
+
+    Chip zřídka končí jedním commitem (kola review přidávají opravy); samotný
+    `HEAD` posuzoval poslední opravu a hlásil „nemění žádný testovací soubor"
+    o chipu, který přidal pět testovacích souborů.
+    """
+
+    def vetev(self, jmeno: str = "ai/chip-07/pokus") -> None:
+        git(self.repo, "checkout", "-q", "-b", jmeno)
+
+    def dva_commity(self) -> None:
+        self.zapis("tools/novy.py", "def f():\n    return 2\n")
+        self.commit("prvni")
+        self.zapis("tests/test_novy.py", CISTY_ZDROJ)
+        self.commit("druhy")
+
+    def test_na_hlavni_vetvi_zustava_head(self) -> None:
+        rozsah, duvod = chip_review.vychozi_rozsah(self.repo)
+        self.assertEqual(rozsah, "HEAD")
+        self.assertIn("jen HEAD", duvod)
+        self.assertIn("--commit", duvod)
+
+    def test_vetev_chipu_se_meri_od_merge_base(self) -> None:
+        self.vetev()
+        self.dva_commity()
+        rozsah, duvod = chip_review.vychozi_rozsah(self.repo)
+        self.assertTrue(rozsah.endswith("..HEAD"), rozsah)
+        self.assertIn("merge-base s", duvod)
+        cesty = {z.cesta for z in chip_review.zmeny(self.repo, rozsah)}
+        self.assertEqual(cesty, {"tools/novy.py", "tests/test_novy.py"})
+
+    def test_main_bez_commit_vidi_oba_commity(self) -> None:
+        self.vetev()
+        self.dva_commity()
+        kod, out = self.spust("07", "--dir", str(self.chips), "--repo", str(self.repo))
+        self.assertEqual(kod, 0, out)
+        self.assertIn("rozsah:", out)
+        self.assertIn("merge-base", out)
+        self.assertIn("tools/novy.py", out)
+        self.assertIn("tests/test_novy.py", out)
+        self.assertNotIn("nemění žádný testovací soubor", out)
+
+    def test_commit_head_hodnoti_jen_posledni(self) -> None:
+        self.vetev()
+        self.dva_commity()
+        kod, out = self.spust("07", "--dir", str(self.chips), "--repo", str(self.repo),
+                              "--commit", "HEAD")
+        self.assertEqual(kod, 0, out)
+        self.assertIn("rozsah: HEAD   (--commit)", out)
+        zmenene = out.split("Rozsah proti nároku")[0]
+        self.assertIn("tests/test_novy.py", zmenene)
+        self.assertNotIn("tools/novy.py", zmenene)
+        self.assertIn("nárok 'tools/novy.py' nemá v commitu jedinou změnu", out)
+
+    def test_hlavni_strom_z_briefu_ma_prednost(self) -> None:
+        """Review ve worktree chipu: základ je HEAD hlavního stromu."""
+        wt = self.tmp / "wt"
+        git(self.repo, "worktree", "add", "-q", str(wt), "-b", "ai/chip-07/pokus")
+        self.addCleanup(git, self.repo, "worktree", "remove", "--force", str(wt))
+        (wt / "tools" / "novy.py").write_text("def f():\n    return 2\n", encoding="utf-8")
+        git(wt, "add", "-A")
+        git(wt, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+            "commit", "-q", "-m", "chip")
+        # orchestrátor mezitím posune hlavní linii
+        self.zapis("tools/jiny.py", "x = 1\n")
+        self.commit("orchestrator")
+        rozsah, duvod = chip_review.vychozi_rozsah(wt, self.repo)
+        self.assertIn("hlavního stromu", duvod)
+        cesty = {z.cesta for z in chip_review.zmeny(wt, rozsah)}
+        self.assertEqual(cesty, {"tools/novy.py"}, "commit orchestrátora není práce chipu")
+
+    def test_bez_hlavni_vetve_zustava_head(self) -> None:
+        hlavni = subprocess.run(["git", "-C", str(self.repo), "rev-parse", "--abbrev-ref", "HEAD"],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        git(self.repo, "branch", "-m", hlavni, "trunk")
+        self.vetev()
+        self.dva_commity()
+        rozsah, duvod = chip_review.vychozi_rozsah(self.repo)
+        self.assertEqual(rozsah, "HEAD")
+        self.assertIn("jen HEAD", duvod)
+
+    def test_nemeri_od_hlavni_vetve_kdyz_na_ni_stoji(self) -> None:
+        """HEAD je hlavní větev: merge-base == HEAD, rozsah zůstává HEAD."""
+        self.dva_commity()
+        rozsah, _ = chip_review.vychozi_rozsah(self.repo)
+        self.assertEqual(rozsah, "HEAD")
 
 
 if __name__ == "__main__":
