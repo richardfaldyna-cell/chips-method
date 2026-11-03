@@ -801,7 +801,9 @@ class TestMain(ZakladRepo):
         self.commit()
         spanky = {"n": 0}
 
-        def falesny_spanek(_sekund) -> None:
+        def falesny_spanek(sekund) -> None:
+            if sekund < 1:      # polling subprocess.run(timeout=) na Linuxu, ne smyčka desky
+                return
             spanky["n"] += 1
             if spanky["n"] >= 2:
                 raise KeyboardInterrupt
@@ -817,8 +819,11 @@ class TestMain(ZakladRepo):
     def test_bez_opakovat_se_negeneruje_znovu(self) -> None:
         self.brief("01")
         self.commit()
-        with patch.object(dash.time, "sleep",
-                          side_effect=AssertionError("nemá se spát")):
+        def nespat(sekund) -> None:
+            if sekund >= 1:     # smyčka desky; polling subprocess.run na Linuxu projde
+                raise AssertionError("nemá se spát")
+
+        with patch.object(dash.time, "sleep", nespat):
             self.assertEqual(self.spust("--out", str(self.cil))[0], 0)
 
     def test_dir_umi_cizi_adresar_s_briefy(self) -> None:
