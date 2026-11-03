@@ -10,6 +10,14 @@ pilot write-ups are in Czech and stay that way — tests assert on them and the
 briefs are a historical record. `README.md` and `docs/methodology.md` are
 English; `README.cs.md` and `docs/metodika.md` are their Czech originals. When
 a rule changes, change **both** language versions of the methodology.
+Exception: files written for outside users since chip 33 — `tools/chip_init.py`,
+`tools/chip_install.py`, their tests and everything under `integrations/` — are
+English, code and user surface alike; keep them that way.
+
+**Relation to the development repo:** this is the public release. The
+development repo went through a wave (chips 26–32) that translated the tools'
+interface to English; that wave is not here, so a change ported from there is
+adapted to the Czech interface (e.g. `--uklid`, `stav:`), not copied.
 
 ## What applies here
 
@@ -45,6 +53,12 @@ a rule changes, change **both** language versions of the methodology.
   agent wrote in its summary. The PreToolUse hook runs it once more at merge —
   if you want to bypass it, stop and ask the user. After every merge run the
   whole suite on the main branch — green in isolation is not green together.
+- **The hook is registered on this repo itself** in `.claude/settings.json`
+  (`timeout` 600 s, `--budget 540`). A gate that outruns the budget is rejected,
+  not let through — if the suite grows past that, raise both numbers together.
+- **Optional review before the merge:** `/chip-review-loop NN` (install once
+  with `python tools/chip_install.py`). It never merges and never switches
+  `stav:`; that stays with you.
 - You switch the chip's state, not the agent. The chip's mandate is the Log
   and the checkboxes.
 

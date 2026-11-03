@@ -153,6 +153,51 @@ python tools/chip_run.py 01 --uklid
 </code></pre>
 <p>Bez <code>--spustit</code> otevřeš vytvořený worktree v novém okně Claude Code sám a předáš<br />
 mu vypsané zadání. Podrobně: <a href="docs/metodika.md">docs/metodika.md</a>.</p>
+<h3 id="nasazeni-do-tveho-repa-hook-brany">Nasazení do tvého repa: hook brány</h3>
+<p>Klon tohoto repa ti dá nástroje, <strong>ne</strong> bránu. Pravidlo 3 vynucuje <code>PreToolUse</code><br />
+hook, který musí být registrovaný v repu, kde chipy běží — a vynechání tohohle<br />
+kroku není vidět: brána vypadá, že existuje, a nikdy neběží. Jeden příkaz udělá<br />
+celé nasazení a pak <strong>doloží, že hook zamítá</strong>:</p>
+<pre><code class="language-bash">python tools/chip_init.py /cesta/k/tvemu/repu          # --check jen vypíše stav
+</code></pre>
+<p>Založí <code>&lt;repo&gt;/chips/</code>, zaregistruje hook do <code>&lt;repo&gt;/.claude/settings.json</code><br />
+(sloučí s tím, co tam je; cesta relativní k <code>$CLAUDE_PROJECT_DIR</code>), nainstaluje<br />
+review smyčku do <code>~/.claude</code> (viz níž) a podstrčí hooku merge větve<br />
+<code>ai/chip-99/does-not-exist</code> i obyčejný merge a ověří obě rozhodnutí. Druhé<br />
+spuštění nic nezmění. Vlajky: <code>--check</code> (jen vypsat, nic nezapsat), <code>--global</code><br />
+(registrace do <code>~/.claude/settings.json</code> s absolutní cestou, pro sessions<br />
+s jiným kořenem než repo), <code>--no-review</code>, <code>--hook-timeout N</code> (výchozí 600 s,<br />
+minimum 90). Nástroj i jeho výstup jsou anglicky — je pro cizího uživatele.</p>
+<p>Ručně je to tahle registrace:</p>
+<pre><code class="language-json">{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash|PowerShell&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;python \&quot;$CLAUDE_PROJECT_DIR/../CHIPS/tools/hook_chip_gate.py\&quot; --budget 540&quot;,
+            &quot;shell&quot;: &quot;bash&quot;,
+            &quot;timeout&quot;: 600
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<p><strong><code>--budget</code> musí být kratší než <code>timeout</code>.</strong> Když hook přeběhne svůj<br />
+<code>timeout</code>, Claude Code to bere jako neblokující chybu a příkaz pustí — brána<br />
+pomalejší než timeout by merge propustila neověřený. S <code>--budget N</code> hook bránu<br />
+po N sekundách zastaví sám a merge zamítne; drž <code>budget = timeout - 60</code>. Bez<br />
+<code>--budget</code> hook použije 240 s, což zůstává pod starším <code>"timeout": 300</code>. Obojí<br />
+nastav podle své nejpomalejší brány (plná sada tohoto repa trvá na Windows<br />
+několik minut); <code>chip_init.py --hook-timeout N</code> dvojici zapíše za tebe.</p>
+<p>Co <code>chip_init.py</code> doložit nemůže, je, že Claude Code hook skutečně spouští.<br />
+Restartuj session v repu a zkus <code>git merge ai/chip-99/does-not-exist</code>: musí být<br />
+zamítnutý hláškou CHIPS, zatímco <code>git merge nejaka-obycejna-vetev</code> smí selhat<br />
+jen gitovým <code>not something we can merge</code>.</p>
 <p><strong>V cizím repu, kam nemá zůstat stopa</strong>, dej briefy stranou (<code>--dir &lt;cesta&gt;</code><br />
 nebo <code>CHIPS_DIR</code>) a repo přihlas k bráně jedním netrackovaným souborem:</p>
 <pre><code class="language-bash">echo /cesta/k/briefum &gt; &lt;repo&gt;/.chips
@@ -168,6 +213,31 @@ python tools/chip_slice.py --todo TODO.md --zapsat chips/
 # podklad pro nezávislého reviewera hotového chipu
 python tools/chip_review.py 01
 </code></pre>
+<h3 id="review-smycka-claude-code-volitelne">Review smyčka (Claude Code, volitelné)</h3>
+<p>Zelená brána dokazuje, že testy chipu procházejí, ne že by si všimly rozbitého<br />
+chipu. Review smyčka staví mezi bránu a merge dva čerstvé subagenty: <strong>critica</strong>,<br />
+který hledá mezery proti briefu (a smí dočasně rozbít kód, aby viděl, jestli<br />
+test spadne), a <strong>judge</strong>, který ověří citace critica a vrátí jeden verdikt —<br />
+nejvýš tři kola, a nikdy nemerguje. Proč a kdy: <a href="docs/metodika.md">docs/metodika.md</a>,<br />
+sekce „Review smyčka".</p>
+<pre><code class="language-bash">python tools/chip_install.py            # do ~/.claude — každý projekt na tomhle stroji
+python tools/chip_install.py --target /cesta/k/repu/.claude   # jen jeden projekt
+python tools/chip_install.py --check    # po `git pull`: exit 1, když kopie chybí, je stará nebo upravená
+</code></pre>
+<p>Nástroj zapíše <code>agents/chip-critic.md</code>, <code>agents/chip-judge.md</code> a<br />
+<code>skills/chip-review-loop/SKILL.md</code> z <code>integrations/claude-code/</code> s dosazenou<br />
+absolutní cestou k <code>tools/</code> tohoto klonu. Každý nainstalovaný soubor končí<br />
+razítkem svého obsahu: kopie, na kterou nikdo nesáhl, se aktualizuje na místě,<br />
+ručně upravená se odmítne (<code>--force</code> přebije). Restartuj session Claude Code,<br />
+zkontroluj, že <code>/agents</code> ukazuje <code>chip-critic</code> a <code>chip-judge</code>, a pak smyčku<br />
+zavolej z orchestrující session, až je brána chipu zelená:</p>
+<pre><code>/chip-review-loop 07
+/chip-review-loop 07 --dir cesta/k/briefum     # briefy mimo ./chips
+</code></pre>
+<p>Kola se zapisují do <code>.git/chips-review/07/</code> v repu chipu (nikdy se necommitují,<br />
+přežijí <code>--uklid</code>): podklady, JSON critica a judge za každé kolo a <code>queue.md</code><br />
+s nálezy třídy C pro jeden navazující chip. Definice agentů a skill jsou<br />
+anglicky.</p>
 <hr />
 <h2 id="struktura">Struktura</h2>
 <pre><code>CHIPS/
@@ -177,7 +247,9 @@ python tools/chip_review.py 01
 │   ├── methodology.md  # totéž anglicky
 │   ├── konverzace-2026-07-25.md   # vznik projektu, původní diskuse
 │   └── vlna-4-preruseno.md        # co vydrží přerušení vlny (a jak ji dokončit)
-├── tests/              # 693 testů, stdlib unittest
+├── integrations/
+│   └── claude-code/    # review smyčka: agents/chip-critic.md, agents/chip-judge.md, skills/chip-review-loop/
+├── tests/              # 757 testů, stdlib unittest
 └── tools/
     ├── chip_new.py     # založí chip z šablony
     ├── chip_slice.py   # nakrájí seznam issues na návrhy chipů
@@ -188,6 +260,8 @@ python tools/chip_review.py 01
     ├── chip_gate.py    # spustí bránu chipu v jeho worktree
     ├── hook_chip_gate.py  # PreToolUse hook: merge až po zelené bráně
     ├── chip_review.py  # podklad pro nezávislého reviewera
+    ├── chip_init.py    # nasadí CHIPS do repa: složka briefů, hook brány, review smyčka, samotest
+    ├── chip_install.py # nainstaluje review smyčku do ~/.claude (nebo .claude projektu)
     ├── chip_common.py  # parser briefů (sdílený základ)
     └── md2html.py      # .md → .html (konvence workspace)
 </code></pre>
@@ -198,18 +272,18 @@ python tools/chip_review.py 01
 <table>
 <thead>
 <tr>
-<th></th>
+<th>ukazatel</th>
 <th>výsledek</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>chipy celkem</td>
-<td>24/24 merged, 0 <code>blocked</code></td>
+<td>27/27 merged, 0 <code>blocked</code></td>
 </tr>
 <tr>
 <td>testy</td>
-<td>0 → <strong>693</strong></td>
+<td>0 → <strong>757</strong></td>
 </tr>
 <tr>
 <td>zásahy mimo nárokované soubory</td>
@@ -247,6 +321,13 @@ který na sobě rovnou doložil, proč je potřeba — nad pěti běžícími ch
 177/192 hotových issues tam, kde <code>chip_status.py</code> z hlavního stromu viděl 140/192.</p>
 <p>Co z toho plyne pro tvoje řezání, je v <a href="docs/metodika.md">docs/metodika.md</a>,<br />
 sekce „Co ukázal pilot".</p>
+<p><strong>Chipy 33–35 (2026-10-16).</strong> Review smyčka (critic + judge jako subagenti,<br />
+<code>chip_install.py</code>), nasazení jedním příkazem (<code>chip_init.py</code>) a časový rozpočet<br />
+brány (<code>--budget</code>: hook, kterému dojde čas, zamítne místo toho, aby merge<br />
+pustil). Chip 33 byl první chip prověřený vlastní smyčkou: dvě kola, dva nálezy<br />
+B přijaté a opravené, verdikt <code>COMPLETE</code>. Mezera v číslování 26–32 je vlna,<br />
+která ve vývojovém repu přeložila rozhraní nástrojů do angličtiny a není součástí<br />
+tohoto vydání.</p>
 <p><strong>Další krok:</strong> nasazení na reálný firemní projekt. Viz <a href="TODO.md">TODO.md</a>.</p>
 <hr />
 <h2 id="licence">Licence</h2>

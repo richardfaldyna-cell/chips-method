@@ -31,15 +31,50 @@ stavem je horší než žádná: vypadá jako důkaz a není.
 
 Vstup: JSON na stdin (`tool_input.command`, `cwd`). Výstup: nic (povoleno),
 nebo JSON s `permissionDecision: deny` a důvodem.
+
+Rozpočet času (`--budget SEKUNDY`, výchozí 240): Claude Code bere vypršení
+hooku jako neblokující chybu a příkaz pustí, takže brána pomalejší než
+`timeout` hooku by merge propustila neověřený. Hook proto bránu po vyčerpání
+rozpočtu zastaví sám a zamítne. Rozpočet musí být kratší než registrovaný
+`timeout`; `chip_init.py` zapisuje `timeout - 60`. Výchozí hodnota zůstává
+pod 300 s starších registrací.
 """
 
 from __future__ import annotations
+
+import time
+
+# Bere se dřív než cokoli jiného: rozpočet kryje celý běh hooku včetně startu
+# a importů, protože timeout Claude Code ho kryje taky.
+START = time.monotonic()
 
 import json
 import os
 import re
 import sys
 from pathlib import Path
+
+DEFAULT_BUDGET = 240
+
+
+def budget_from_argv(argv: list[str]) -> int:
+    """`--budget N` / `--budget=N` z příkazové řádky; cokoli neplatného → výchozí.
+
+    Nikdy nevyhazuje: překlep v settings.json nesmí hook shodit, protože
+    spadlý hook je taky neblokující chyba — merge by prošel.
+    """
+    hodnota = None
+    for i, arg in enumerate(argv):
+        if arg == "--budget" and i + 1 < len(argv):
+            hodnota = argv[i + 1]
+        elif arg.startswith("--budget="):
+            hodnota = arg.split("=", 1)[1]
+    try:
+        n = int(hodnota) if hodnota is not None else DEFAULT_BUDGET
+    except ValueError:
+        return DEFAULT_BUDGET
+    return n if n > 0 else DEFAULT_BUDGET
+
 
 MERGE = re.compile(r"\bgit\b[^|;&\n]*\bmerge\b")
 
@@ -392,7 +427,11 @@ def zamitni(duvod: str) -> None:
     sys.stdout.write("\n")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, start: float | None = None) -> int:
+    # `start` je START jen při spuštění jako skript (viz konec souboru); testy
+    # volají main() v procesu dlouho po importu, kdy by START byl zastaralý.
+    budget = budget_from_argv(argv or [])
+    deadline = (time.monotonic() if start is None else start) + budget
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
@@ -470,9 +509,21 @@ def main() -> int:
                       "znovu — merge bere commitnutý tip větve, ne working tree.")
             return 0
 
-        ok, hlaseni = chip_gate.brana(chip, strom)
+        ok, hlaseni = chip_gate.brana(chip, strom, deadline=deadline)
         if ok:
             continue
+        if (time.monotonic() >= deadline
+                or any(chip_gate.ROZPOCET_VYCERPAN in r for r in hlaseni)):
+            zamitni(f"CHIPS brána chipu {cislo} ({chip.nazev}) NEDOBĚHLA v časovém "
+                    f"rozpočtu hooku {budget} s — merge zablokován.\n"
+                    f"  (ověřováno ve stromě: {strom})\n"
+                    + "\n".join(hlaseni)
+                    + "\n\nNedoběhlá brána není zelená brána. Spusť ji ručně: "
+                      f"python tools/chip_gate.py {cislo} --repo \"{strom}\"\n"
+                      "a v .claude/settings.json zvyš 'timeout' hooku spolu s "
+                      "'--budget' (budget = timeout - 60), např. "
+                      "python tools/chip_init.py <repo> --hook-timeout 900")
+            return 0
 
         zamitni(f"CHIPS brána chipu {cislo} ({chip.nazev}) NEPROŠLA — merge zablokován.\n"
                 f"  (ověřováno ve stromě: {strom})\n"
@@ -489,4 +540,4 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, OSError):                     # pragma: no cover
         pass
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:], START))

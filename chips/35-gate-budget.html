@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>`stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 80px;
+  line-height: 1.6; font-size: 16px;
+  color: #1a2733; background: #ffffff;
+}
+h1, h2, h3, h4 { color: #163a4d; line-height: 1.25; margin: 1.6em 0 .5em; }
+h1 { font-size: 1.9em; border-bottom: 3px solid #e8734a; padding-bottom: .3em; margin-top: .2em; }
+h2 { font-size: 1.4em; border-bottom: 1px solid #d8dee3; padding-bottom: .25em; }
+h3 { font-size: 1.15em; }
+a { color: #1f6f8b; }
+code { background: #eef2f4; padding: .1em .35em; border-radius: 4px; font-size: .88em;
+       font-family: Consolas, "Courier New", monospace; }
+pre { background: #f4f6f8; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      border: 1px solid #e2e8ec; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #e8734a; margin: 1em 0; padding: .4em 1em;
+             background: #f7f9fa; color: #33454f; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em;
+        display: block; overflow-x: auto; }
+th, td { border: 1px solid #cfd8dd; padding: 7px 11px; text-align: left; vertical-align: top; }
+th { background: #163a4d; color: #fff; }
+tr:nth-child(even) td { background: #f5f8fa; }
+ul, ol { padding-left: 1.5em; }
+li { margin: .25em 0; }
+hr { border: none; border-top: 1px solid #d8dee3; margin: 2em 0; }
+strong { color: #10222e; }
+.doc-foot { margin-top: 60px; padding-top: 16px; border-top: 1px solid #d8dee3;
+            font-size: .8em; color: #8496a0; }
+@media (prefers-color-scheme: dark) {
+  body { color: #d7e0e6; background: #14202a; }
+  h1, h2, h3, h4 { color: #7fc7e8; }
+  h2 { border-bottom-color: #2a3b47; }
+  a { color: #6cb6d9; }
+  code { background: #22323d; }
+  pre { background: #1b2933; border-color: #2a3b47; }
+  blockquote { background: #1b2933; color: #b9c6ce; }
+  th, td { border-color: #2f4450; }
+  th { background: #1f4a5f; }
+  tr:nth-child(even) td { background: #1a2833; }
+  strong { color: #eef4f7; }
+  hr { border-top-color: #2a3b47; }
+}
+</style>
+</head>
+<body>
+<hr />
+<p>chip: 35<br />
+nazev: gate-budget<br />
+stav: merged</p>
+<h1 id="stav-prepina-orchestrator-ne-agent-mandat-agenta-je-log-a-checkboxy"><code>stav:</code> přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</h1>
+<p>zavisi_na: 34<br />
+repo: ..<br />
+greenfield: ne<br />
+vetev: ai/chip-35/gate-budget<br />
+worktree: ../CHIPS-chip-35</p>
+<hr />
+<h1 id="chip-35-gate-budget-brana-pri-vyprseni-zamita">CHIP 35 — gate budget: brána při vypršení zamítá</h1>
+<p>Claude Code bere vypršení hooku <code>PreToolUse</code> jako neblokující chybu: příkaz<br />
+proběhne. Brána, která běží déle než timeout hooku (CHIPS sám: plná sada<br />
+~360 s, timeout 300 s), tak merge <strong>pustí neověřený</strong> — fail-open přesně tam,<br />
+kde má metoda stát. Chip dává hooku vlastní rozpočet kratší než timeout: když<br />
+ho brána přečerpá, hook zamítne sám.</p>
+<h2 id="issues">Issues</h2>
+<ul>
+<li>[x] #1 — <code>chip_gate.brana(c, repo, deadline=None)</code>: volitelný absolutní<br />
+      termín (<code>time.monotonic()</code>); timeout každého příkazu = min(dosavadních<br />
+      600 s, zbývající čas); po vyčerpání <code>False</code> s hláškou, že došel rozpočet<br />
+      — nikdy <code>True</code></li>
+<li>[x] #2 — <code>hook_chip_gate.py --budget N</code> (sekundy): termín pro <code>brana</code>;<br />
+      vyčerpání → <code>deny</code> s hláškou, jak bránu ověřit ručně (<code>chip_gate.py NN</code>)<br />
+      a že je třeba zvýšit timeout hooku a <code>--budget</code></li>
+<li>[x] #3 — bez <code>--budget</code> výchozí rozpočet 240 s — pod timeoutem 300 s starších<br />
+      registrací, takže i ty zamítají místo propuštění; neplatná hodnota<br />
+<code>--budget</code> → výchozí, hook nespadne</li>
+<li>[x] #4 — rozpočet zahrnuje i čas před bránou (start hooku), ne jen příkazy<br />
+      brány</li>
+<li>[x] #5 — <code>chip_init.py</code> zapisuje příkaz s <code>--budget &lt;timeout - 60&gt;</code>;<br />
+<code>--hook-timeout</code> pod 90 → exit 2 s hláškou</li>
+<li>[x] #6 — <code>.claude/settings.json</code> CHIPSu: timeout 600, příkaz s <code>--budget 540</code></li>
+<li>[x] #7 — testy: <code>brana</code> s prošlým termínem nespustí nic a vrátí <code>False</code>,<br />
+      příkaz delší než zbytek rozpočtu → <code>False</code>; hook s <code>--budget</code> přes<br />
+      subprocess na pomalé bráně → <code>deny</code>; <code>chip_init</code> zapíše <code>--budget</code></li>
+<li>[x] #8 — README (CS i EN): ruční registrace s <code>--budget</code>, odstavec proč<br />
+      (timeout = fail-open); <code>.html</code> přegenerovat</li>
+</ul>
+<h2 id="dotcene-soubory-narok">Dotčené soubory  ⚠️ NÁROK</h2>
+<pre><code>tools/chip_gate.py
+tools/hook_chip_gate.py
+tools/chip_init.py
+.claude/settings.json       # nový
+tests/test_chip_gate.py
+tests/test_chip_init.py
+README.md
+README.cs.md
+</code></pre>
+<h2 id="definition-of-done">Definition of done</h2>
+<ul>
+<li>[x] <code>python -m unittest discover -s tests</code> zelené, počet = výchozí stav<ul>
+<li>nové testy</li>
+</ul>
+</li>
+<li>[x] hook s <code>--budget 2</code> nad chipem, jehož brána je<br />
+<code>python -c "import time; time.sleep(30)"</code>, vrátí <code>deny</code> do 15 s</li>
+<li>[x] strength test: <code>brana</code>, která termín ignoruje, shodí aspoň jeden test</li>
+<li>[x] <code>python tools/chip_lint.py</code> exit 0;<br />
+<code>python tools/hook_chip_gate.py --budget 5 &lt; /dev/null</code> exit 0</li>
+</ul>
+<h2 id="overeni-brana">Ověření (brána)</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests
+python tools/chip_lint.py
+python tools/chip_init.py --help
+</code></pre>
+<h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
+<ul>
+<li>změna rozhodovací logiky hooku mimo rozpočet (co je merge, co je chip<br />
+  větev, kde se ověřuje)</li>
+<li>jakákoli cesta, kdy vyčerpaný rozpočet vede na propuštění</li>
+<li>nová závislost</li>
+<li>soubor mimo „Dotčené soubory"</li>
+</ul>
+<h2 id="kontext-pro-agenta">Kontext pro agenta</h2>
+<ul>
+<li>Hook vrací odmítnutí přes <code>zamitni()</code> (<code>hookSpecificOutput.permissionDecision
+  = "deny"</code>) a exit 0.</li>
+<li><code>chip_gate.spust</code> už timeout převádí na exit 124 — stačí mu předat menší číslo.</li>
+</ul>
+<h2 id="log">Log</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Stav</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-10-16</td>
+<td>draft</td>
+<td>založeno</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>ready</td>
+<td>z TODO po chipu 34: timeout hooku 300 s &lt; brána ~360 s; zjištěno, že vypršení = fail-open</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>gated</td>
+<td><code>chip_gate.brana(deadline)</code> + <code>COMMAND_TIMEOUT</code>; hook <code>--budget</code> (výchozí 240 s, <code>START</code> při spuštění skriptu, <code>main(argv, start)</code>); <code>chip_init</code> zapisuje <code>--budget timeout-60</code>, min. timeout 90, poznámka u registrace bez <code>--budget</code>; <code>.claude/settings.json</code> 600/540. <strong>Nález během práce:</strong> <code>spust()</code> se <code>subprocess.run(shell=True, timeout)</code> na Windows zabil jen shell, vnuk držel rouru → 30 s příkaz pod 2 s timeoutem trval 30 s; dosavadní 600 s timeout brány tedy nic nezastavoval. <code>Popen</code> + <code>kill_tree</code> (<code>taskkill /T</code>, <code>killpg</code>) + test. <strong>Brána zelená</strong> ve vývojovém repu (869 testů, lint 0 chyb). <strong>Důkaz síly:</strong> brána ignorující termín (v oddělené kopii) → 6 testů červených.</td>
+</tr>
+<tr>
+<td>2026-10-16</td>
+<td>merged</td>
+<td><code>chip_gate.py 35</code> ZELENÁ, sloučeno <code>--no-ff</code>, worktree uklizen.</td>
+</tr>
+<tr>
+<td>2026-10-25</td>
+<td>merged</td>
+<td><strong>Port do veřejného repa <code>chips-method</code>.</strong> Hlášky brány a hooku zůstávají české (značka <code>chip_gate.ROZPOCET_VYCERPAN</code>, podle které hook pozná vyčerpání). Vývojová verze chipu měla navíc opravu parseru na anglický klíč <code>status:</code>; veřejný parser zná jen <code>stav:</code>, takže tady není co opravovat. Počty testů v řádcích výše platí pro vývojové repo.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-foot">Vygenerováno z <code>35-gate-budget.md</code> &middot; `stav:` přepíná ORCHESTRÁTOR, ne agent — mandát agenta je Log a checkboxy.</div>
+</body>
+</html>

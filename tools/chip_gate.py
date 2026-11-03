@@ -23,9 +23,12 @@ Návratový kód 1 = brána neprošla (vhodné do hooku / CI).
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from chip_common import ROOT, nacti_vse, nastav_chips_dir, pridej_arg_dir, utf8_vystup
@@ -67,24 +70,68 @@ def prikazy(c) -> list[str]:
     return out
 
 
+def kill_tree(p: subprocess.Popen) -> None:
+    """Zabije shell I VŠECHNO, co spustil.
+
+    `subprocess.run(shell=True, timeout=...)` zabije jen shell; vlastní příkaz
+    brány (jeho potomek) drží otevřené roury a `run` pak čeká, až doběhne sám —
+    na Windows trval 30 s příkaz pod 2 s timeoutem 30 s. Timeout, který nic
+    nezastaví, není timeout (nález chipu 35).
+    """
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                       capture_output=True)
+    else:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:                                   # pragma: no cover
+            pass
+    try:
+        p.kill()
+    except OSError:                                       # pragma: no cover
+        pass
+
+
 def spust(repo: Path, prikaz: str, timeout: int = 600) -> tuple[int, str]:
     """Spustí jeden příkaz brány v kořeni repa; vrací (kód, výstup)."""
+    # Vlastní skupina procesů / session, aby `kill_tree` dosáhl i na potomky.
+    skupina = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+               else {"start_new_session": True})
     try:
-        p = subprocess.run(prikaz, cwd=str(repo), shell=True, timeout=timeout,
-                           capture_output=True, text=True, encoding="utf-8",
-                           errors="replace")
-    except subprocess.TimeoutExpired:
-        return 124, f"timeout po {timeout}s"
+        p = subprocess.Popen(prikaz, cwd=str(repo), shell=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, encoding="utf-8", errors="replace", **skupina)
     except OSError as e:                                  # pragma: no cover
         return 127, f"nelze spustit: {e}"
-    return p.returncode, (p.stdout or "") + (p.stderr or "")
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        kill_tree(p)
+        try:
+            p.communicate(timeout=10)
+        except subprocess.TimeoutExpired:                 # pragma: no cover
+            pass
+        return 124, f"timeout po {timeout}s"
+    return p.returncode, (out or "") + (err or "")
 
 
-def brana(c, repo: Path) -> tuple[bool, list[str]]:
+COMMAND_TIMEOUT = 600
+
+# Značka v hlášení brány, podle které hook pozná, že brána nedoběhla kvůli
+# rozpočtu, ne kvůli chybě. Hook ji hledá podřetězcem — neměnit bez testu.
+ROZPOCET_VYCERPAN = "rozpočet času vyčerpán"
+
+
+def brana(c, repo: Path, deadline: float | None = None) -> tuple[bool, list[str]]:
     """Spustí celou bránu chipu. Vrací (prošlo, řádky hlášení).
 
     Zastavuje se na prvním neúspěchu — další příkazy už stejně běží nad
     rozbitým stavem a jen by zdržovaly.
+
+    `deadline` je absolutní čas podle `time.monotonic()`. Předává ho hook:
+    Claude Code bere vypršení hooku jako neblokující chybu a příkaz pustí —
+    brána zabitá zvenčí je brána, která prošla. S termínem se brána zastaví
+    sama a ohlásí neúspěch; vyčerpaný čas nikdy nevrátí `True`.
     """
     hlaseni: list[str] = []
     seznam = prikazy(c)
@@ -93,7 +140,17 @@ def brana(c, repo: Path) -> tuple[bool, list[str]]:
                        f"— chip bez brány se nemerguje"]
 
     for prikaz in seznam:
-        kod, vystup = spust(repo, prikaz)
+        timeout = COMMAND_TIMEOUT
+        if deadline is not None:
+            zbyva = int(deadline - time.monotonic())
+            if zbyva < 1:
+                hlaseni.append(f"  X   {prikaz}   (nespuštěno — {ROZPOCET_VYCERPAN})")
+                return False, hlaseni
+            timeout = min(timeout, zbyva)
+        kod, vystup = spust(repo, prikaz, timeout)
+        if kod == 124 and deadline is not None and timeout < COMMAND_TIMEOUT:
+            hlaseni.append(f"  X   {prikaz}   ({ROZPOCET_VYCERPAN} po {timeout}s)")
+            return False, hlaseni
         if kod == 0:
             hlaseni.append(f"  OK  {prikaz}")
             continue

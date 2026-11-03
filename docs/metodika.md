@@ -280,6 +280,51 @@ rozdíl 37 odškrtnutých issues a pět stavů.
 **Když brána selže, chip nekončí mergem, ale otevřeným PR.** To je celý rozdíl
 mezi „autonomní" a „bez dohledu".
 
+### Review smyčka: po zelené bráně, před mergem
+
+Zelená brána dokazuje, že testy chipu procházejí. Nedokazuje, že by si ty testy
+všimly rozbitého chipu — psal je tentýž model jako kód (viz role reviewera
+v § 9). Review smyčka je volitelný krok, který ověřuje právě to, dvěma rolemi,
+které kód nepsaly:
+
+| Role | Vidí | Smí | Nesmí |
+|---|---|---|---|
+| **critic** | brief, diff, podklady z `chip_review.py` | spustit bránu a testy, dočasně rozbít kód a sledovat, jestli test spadne (mutace), hlásit nálezy s citací `soubor:řádek` | cokoli opravit, nechat worktree změněný, commitovat, mergovat, sahat na brief |
+| **judge** | totéž plus nálezy critica | otevřít každé citované místo a nález přijmout nebo zamítnout, vrátit jeden verdikt | přidávat vlastní nálezy, spouštět příkazy, zapisovat soubory, rozhodovat o merge |
+
+Nálezy se hodnotí **proti briefu, ne proti vkusu**:
+
+- **A** — chip je špatně proti vlastnímu briefu: odškrtnutá položka DoD, která
+  neplatí, odškrtnutá issue bez kódu, test, který přežije mutaci, soubor mimo
+  nárok, položka T3 rozhodnutá místo eskalovaná.
+- **B** — brief je splněný, ale neobhájený: položka DoD, kterou nic neověřuje,
+  neošetřený vstup, který z issues plyne, chyba spolknutá s exit 0.
+- **C** — všechno ostatní. C nikdy neblokuje; sbírá se do fronty pro **jeden**
+  navazující chip, protože opravovat nálezy review po jednom je přesně místo,
+  kde výnos padá (§ 9).
+
+Judge vrací právě jeden verdikt: `COMPLETE` (žádné přijaté A ani B — chip jde
+dál k bráně a merge), `CONTINUE` (přijatá A/B opravitelná v rámci nároku —
+opravit, commitnout, zelená brána, další kolo), `ESCALATE` (potřeba rozhodnutí
+člověka) nebo `IMPOSSIBLE` (brief si odporuje). Stropy jsou mechanické, ne
+podle nálady judge: **nejvýš 3 kola**, stejný HEAD jako minulé kolo znamená
+žádný pokrok, nález přijatý dvakrát znamená, že oprava nefunguje, soubor mimo
+nárok critica úplně přeskočí. Po criticovi musí být `git status --porcelain`
+ve worktree prázdný — zapomenutá mutace by se jinak zmergovala jako oprava.
+
+**Není to hlasování, které § 6 odmítá.** Judge nenahrazuje rozhodnutí ani test;
+filtruje tvrzení critica proti kódu, aby se z nepodloženého nálezu nestala
+práce. Každý přijatý nález končí změnou kódu *s testem, který bez ní padá*,
+a o merge dál rozhoduje brána, hook a ty. Verdikt `ESCALATE` je smyčka, která
+dělá svou práci, ne smyčka, která selhala.
+
+**Kdy ji nepouštět.** Chip, jehož DoD je porovnání bajtů nebo grep
+(dokumentace, generované soubory), získá málo; brána už měří celé chování.
+Jedno kolo stojí zhruba 150–200 tisíc tokenů (critic plus judge), asi dvojnásobek
+chipu. Utrácej je za chipy, které mění logiku.
+
+Jak smyčku nainstalovat a volat: README, sekce „Review smyčka".
+
 ---
 
 ## 5. Definition of done
