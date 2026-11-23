@@ -150,6 +150,17 @@ Absolutní cesta nebo <code>..</code> je chyba — nárok pak nejde porovnat s o
 Nárok na neexistující soubor je buď překlep, nebo zastaralý brief — a v obou<br />
 případech je řez chipu postavený na něčem, co tam není. Značka <code># nový</code> je<br />
 jediná výjimka a je záměrně explicitní: musíš ji napsat, ne na ni spoléhat.</p>
+<p>„Existuje" znamená <strong>commitnutý v HEAD</strong>, ne ležící v pracovním stromu.<br />
+Worktree chipu větví z HEAD, takže soubor, který jsi vytvořil, ale necommitnul,<br />
+pro chip neexistuje: nárok na něj bez <code># nový</code> je chyba, nárok s <code># nový</code> je<br />
+správný a nevaruje. Je to totéž pravidlo jako „commitni před <code>chip_run.py</code>",<br />
+jen ho hlídá nástroj místo tvé paměti.</p>
+<p><strong>Nároky se porovnávají ukotvené k <code>repo:</code>.</strong> Jeden adresář briefů smí řídit<br />
+několik repozitářů (<code>--dir</code> nad projektem s vnořenými repy) a <code>README.md</code><br />
+v repu A není <code>README.md</code> v repu B — lint porovnává <code>&lt;repo&gt;/&lt;nárok&gt;</code>, ne holý<br />
+nárok. Týž soubor dosažený přes dvě repa koliduje dál: <code>sub/README.md</code><br />
+nárokovaný v rodičovském repu a <code>README.md</code> nárokovaný ve vnořeném repu <code>sub/</code><br />
+jsou jedna cesta.</p>
 <blockquote>
 <p>Vzor pokrývá i soubory, které teprve vzniknou. <code>src/*.py</code> v jednom chipu tedy<br />
 koliduje s <code>src/nove.py  # nový</code> v druhém, i když ten soubor zatím neexistuje.</p>
@@ -226,6 +237,11 @@ načtou soubor, obě ho zapíšou, druhý zápis přemaže první.</p>
 </code></pre>
 <p>Každé okno pracuje ve své složce, na své větvi, s vlastním indexem. Merguje se<br />
 až na konci a případný konflikt řeší git normálně a viditelně.</p>
+<p>Worktree leží <strong>mimo každý git strom</strong>. „Vedle repa" (<code>worktree:
+../repo-chip-01</code>) je správný výchozí tvar pro repo na nejvyšší úrovni a špatný<br />
+pro repo vnořené do jiného: worktree by přistál v rodičovském repu jako<br />
+netrackovaný adresář, jeden <code>git add -A</code> od commitu. <code>chip_run.py</code> takové<br />
+umístění odmítne a řekne, jaký absolutní <code>worktree:</code> napsat místo něj.</p>
 <p>Claude Code na to má <code>EnterWorktree</code> (pro session) a subagenti parametr<br />
 <code>isolation: "worktree"</code>. <code>tools/chip_run.py</code> to udělá za tebe.</p>
 <p><strong>Navazující chip se větví z předchůdce, ne z HEAD.</strong> Když chip B staví na<br />
@@ -305,6 +321,13 @@ přání. Sílu má jen něco, co <strong>selže samo od sebe</strong>, když je
 python -m build              # build
 python smoke_test.py         # smoke test proti reálným datům
 </code></pre>
+<p>Příkazy běží v shellu, který deklaruje tag bloku: <code>```bash</code> v bashi<br />
+(na Windows Git Bash vedle <code>git.exe</code>, přepsat jde přes <code>CHIPS_BASH</code>),<br />
+<code>```cmd</code> v cmd.exe, bez tagu v systémovém shellu. Tag je autorovo<br />
+prohlášení o jazyce, proto rozhoduje — před chipem 36 běžela každá brána na<br />
+Windows v cmd.exe, kde <code>a &amp;&amp; b || exit 1</code> znamená něco jiného a často přesto<br />
+skončí 0: zelená brána, která nic neověřila. Shell, který není k dispozici,<br />
+příkaz shodí; nikdy se nepadá na jiný.</p>
 <p>Tři úrovně vynucení, od nejslabší po nejsilnější:</p>
 <table>
 <thead>
@@ -654,7 +677,9 @@ nezamčené hranice. Nic z toho brána nechytila, protože všechno bylo <em>uvn
 autorovy úvahy konzistentní.</p>
 <p>Nástroj <code>chip_review.py</code> dělá strojovou část (rozsah změn proti nároku, testy<br />
 bez assertů, DoD proti příkazům brány) a <code>--zadani</code> vypíše brief pro agenta.<br />
-<strong>Nedělá verdikt</strong> — sbírá podklady.</p>
+<strong>Nedělá verdikt</strong> — sbírá podklady. Měří <strong>celou větev</strong> (<code>merge-base..HEAD</code><br />
+proti hlavní linii) a vypíše použitý rozsah; chip zřídka končí jedním commitem<br />
+a review samotné poslední opravy je review té opravy, ne chipu.</p>
 <p><strong>Kde přestat.</strong> Řetěz chip → review → chip → review → chip je z principu<br />
 sériový a trval přes hodinu. Každá vrstva našla něco nového, ale výnos klesá:<br />
 třetí chip už z poloviny jen zamykal správné chování. Levnější je <strong>nálezy<br />

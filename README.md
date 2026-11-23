@@ -218,7 +218,7 @@ CHIPS/
 │   └── vlna-4-preruseno.md        # what survives an interrupted wave (Czech)
 ├── integrations/
 │   └── claude-code/    # review loop: agents/chip-critic.md, agents/chip-judge.md, skills/chip-review-loop/
-├── tests/              # 757 tests, stdlib unittest
+├── tests/              # 815 tests, stdlib unittest
 └── tools/
     ├── chip_new.py     # creates a chip from the template
     ├── chip_slice.py   # slices a list of issues into chip proposals
@@ -245,8 +245,8 @@ The methodology has been validated by **two pilot runs and one repair wave**.
 
 | metric | result |
 |---|---|
-| chips in total | 27/27 merged, 0 `blocked` |
-| tests | 0 → **757** |
+| chips in total | 28/28 merged, 0 `blocked` |
+| tests | 0 → **815** |
 | edits outside the claimed files | 0 |
 | merge conflicts | 0 (one caused by a tool, not by a chip) |
 | findings escalated instead of silently fixed | 10 |
@@ -288,6 +288,17 @@ merge through). Chip 33 was the first chip reviewed by its own loop: two
 rounds, two B findings accepted and fixed, verdict `COMPLETE`. The numbering gap
 26–32 is a wave that translated the tools' interface to English in the
 development repo and is not part of this release.
+
+**Chip 36 (2026-10-25).** The first deployment over one brief directory driving
+18 chips across 13 nested repositories, on Windows, found five places where the
+tools silently assumed one repo, one shell and a clean working tree. Lint
+collisions are now compared anchored to each chip's `repo:` (176 false
+collisions → 0), the gate runs each block in the shell its fence tag declares
+(```` ```bash ```` → Git Bash, ```` ```cmd ```` → cmd.exe, a missing shell
+fails instead of falling back), `chip_review.py` measures the whole branch
+instead of the last commit, claimed paths are checked against HEAD instead of
+the working tree, and `chip_run.py` refuses a worktree that would land inside
+another git tree.
 
 **Next step:** deployment on a real company project.
 

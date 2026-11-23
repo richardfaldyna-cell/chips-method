@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -1240,6 +1242,213 @@ class TestNavratoveKody(ZakladChipu):
         self.assertEqual(kod_vse, 1, vystup_vse)
         kod_ready, vystup_ready = self.spust("--ready")
         self.assertEqual(kod_ready, 0, vystup_ready)
+
+
+
+
+# =========================================================================
+# CHIP 36 — jeden adresář briefů, více repozitářů; existence proti HEAD
+# =========================================================================
+
+class TestKolizePresRepa(ZakladChipu):
+    """#1 — nároky jsou relativní k `repo:`, porovnávají se ukotvené k němu.
+
+    Jeden adresář briefů (`--dir`) smí řídit chipy v několika repozitářích
+    (vnořená repa v home-labu: 15 chipů, 13 rep). `README.md` v repu A a
+    `README.md` v repu B jsou dva soubory — lint hlásil 103 falešných kolizí.
+    Týž soubor dosažený přes rodičovské a vnořené repo musí kolidovat dál.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.repo_a = self.tmp / "repo-a"
+        self.repo_b = self.tmp / "repo-b"
+        for r in (self.repo_a, self.repo_b):
+            r.mkdir()
+            (r / "README.md").write_text("", encoding="utf-8")
+
+    def test_ukotvi_sklada_repo_a_narok(self) -> None:
+        self.assertEqual(chip_lint.ukotvi("C:/r", "src/x.py"), "C:/r/src/x.py")
+        self.assertEqual(chip_lint.ukotvi("C:/r", "src\\x.py"), "C:/r/src/x.py")
+        self.assertEqual(chip_lint.ukotvi("", "src/x.py"), "src/x.py")
+        # absolutní nárok je chyba jinde — tady se nesmí zdvojit
+        self.assertEqual(chip_lint.ukotvi("C:/r", "/abs/x.py"), "/abs/x.py")
+
+    def test_kotva_je_resolvovane_repo(self) -> None:
+        p = self.napis_brief("01-alfa", soubory=("README.md",), repo=self.repo_a.as_posix())
+        self.assertEqual(chip_lint.kotva(self.nacti(p)), self.repo_a.resolve().as_posix())
+        p = self.napis_brief("02-beta", bez_repo=True)
+        self.assertEqual(chip_lint.kotva(self.nacti(p)), "")
+
+    def test_stejnojmenne_soubory_v_ruznych_repech_nekoliduji(self) -> None:
+        self.napis_brief("01-alfa", soubory=("README.md",), repo=self.repo_a.as_posix())
+        self.napis_brief("02-beta", soubory=("README.md",), repo=self.repo_b.as_posix())
+        kod, vystup = self.spust()
+        self.assertEqual(self.radky_s(vystup, "KOLIZE"), [], vystup)
+        self.assertEqual(kod, 0, vystup)
+
+    def test_stejny_soubor_v_jednom_repu_koliduje_dal(self) -> None:
+        self.napis_brief("01-alfa", soubory=("README.md",), repo=self.repo_a.as_posix())
+        self.napis_brief("02-beta", soubory=("README.md",), repo=self.repo_a.as_posix())
+        kod, vystup = self.spust()
+        radky = self.radky_s(vystup, "KOLIZE")
+        self.assertEqual(len(radky), 1, vystup)
+        self.assertEqual(kod, 1)
+        # hlásí se nárok z briefu, ne ukotvená cesta — to se edituje
+        self.assertNotIn(self.repo_a.as_posix(), radky[0])
+
+    def test_ruzne_zapisy_tehoz_repa_jsou_jedno_repo(self) -> None:
+        rel = Path(os.path.relpath(self.repo_a, self.chips_dir)).as_posix()
+        self.napis_brief("01-alfa", soubory=("README.md",), repo=rel)
+        self.napis_brief("02-beta", soubory=("README.md",), repo=self.repo_a.as_posix())
+        _, vystup = self.spust()
+        self.assertEqual(len(self.radky_s(vystup, "KOLIZE")), 1, vystup)
+
+    def test_tyz_soubor_pres_rodicovske_a_vnorene_repo_koliduje(self) -> None:
+        vnorene = self.repo_a / "sub"
+        vnorene.mkdir()
+        (vnorene / "README.md").write_text("", encoding="utf-8")
+        self.napis_brief("01-alfa", soubory=("sub/README.md",), repo=self.repo_a.as_posix())
+        self.napis_brief("02-beta", soubory=("README.md",), repo=vnorene.as_posix())
+        kod, vystup = self.spust()
+        radky = self.radky_s(vystup, "KOLIZE")
+        self.assertEqual(len(radky), 1, vystup)
+        self.assertEqual(kod, 1)
+        self.assertIn("přes dvě repa", radky[0])
+
+    def test_adresar_rodice_pohlti_vnorene_repo(self) -> None:
+        vnorene = self.repo_a / "sub"
+        vnorene.mkdir()
+        (vnorene / "README.md").write_text("", encoding="utf-8")
+        self.napis_brief("01-alfa", soubory=("sub",), repo=self.repo_a.as_posix())
+        self.napis_brief("02-beta", soubory=("README.md",), repo=vnorene.as_posix())
+        _, vystup = self.spust()
+        self.assertEqual(len(self.radky_s(vystup, "KOLIZE")), 1, vystup)
+
+    def test_vzor_plati_jen_ve_svem_repu(self) -> None:
+        for r in (self.repo_a, self.repo_b):
+            (r / "src").mkdir()
+            (r / "src" / "x.py").write_text("", encoding="utf-8")
+        self.napis_brief("01-alfa", soubory=("src/*.py",), repo=self.repo_a.as_posix())
+        self.napis_brief("02-beta", soubory=("src/x.py",), repo=self.repo_b.as_posix())
+        kod, vystup = self.spust()
+        self.assertEqual(self.radky_s(vystup, "KOLIZE"), [], vystup)
+        self.assertEqual(kod, 0, vystup)
+
+
+class TestExistenceProtiHead(ZakladChipu):
+    """#4 — existence nároků se měří proti HEAD, ne proti pracovnímu stromu.
+
+    Worktree chipu větví z HEAD: soubor, který v hlavním stromě leží jen
+    netrackovaný, pro chip neexistuje. Lint dřív varoval u `# nový` na takovém
+    souboru („už existuje") a nárok bez `# nový` na něj tiše pustil.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if shutil.which("git") is None:                       # pragma: no cover
+            raise unittest.SkipTest("git není na PATH")
+
+    def setUp(self) -> None:
+        super().setUp()
+        if chip_lint.git_koren(self.tmp) is not None:      # pragma: no cover
+            self.skipTest("dočasný adresář sám leží v git stromu — test by měřil něco jiného")
+        self.git("init", "-q")
+        self.vyrob_soubor("modul.py")
+        self.vyrob_soubor("src/a.py")
+        self.commit()
+
+    def git(self, *args: str) -> None:
+        subprocess.run(["git", "-C", str(self.repo), *args], check=True, capture_output=True)
+
+    def commit(self) -> None:
+        self.git("add", "-A")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                 "commit", "-q", "-m", "x")
+
+    def test_soubory_v_head_cte_commitnuty_strom(self) -> None:
+        self.vyrob_soubor("jen_na_disku.py")
+        self.assertEqual(chip_lint.soubory_v_head(self.repo), {"modul.py", "src/a.py"})
+
+    def test_soubory_v_head_mimo_koren_je_none(self) -> None:
+        # `ls-tree` vypisuje od kořene — nárok relativní k podadresáři by neseděl
+        self.assertIsNone(chip_lint.soubory_v_head(self.repo / "src"))
+
+    def test_soubory_v_head_bez_commitu_je_none(self) -> None:
+        cerstvy = self.tmp / "cerstvy"
+        cerstvy.mkdir()
+        subprocess.run(["git", "init", "-q", str(cerstvy)], check=True, capture_output=True)
+        self.assertIsNone(chip_lint.soubory_v_head(cerstvy))
+
+    def test_soubory_v_head_mimo_git_je_none(self) -> None:
+        self.assertIsNone(chip_lint.soubory_v_head(self.tmp))
+
+    def test_v_head_soubor_i_adresar(self) -> None:
+        s = {"modul.py", "src/a.py"}
+        self.assertTrue(chip_lint.v_head(s, "modul.py"))
+        self.assertTrue(chip_lint.v_head(s, "src"))
+        self.assertTrue(chip_lint.v_head(s, "src/"))
+        self.assertFalse(chip_lint.v_head(s, "src/b.py"))
+        self.assertFalse(chip_lint.v_head(s, "sr"))
+
+    def test_netrackovany_soubor_s_novy_nevaruje(self) -> None:
+        self.vyrob_soubor("plan.md")                       # jen na disku
+        p = self.napis_brief("01-alfa", soubory=("plan.md    # nový",))
+        self.assertEqual(chip_lint.zkontroluj_cesty(self.nacti(p)), ([], []))
+        kod, vystup = self.spust()
+        self.assertEqual(kod, 0, vystup)
+        self.assertEqual(self.radky_s(vystup, "už existuje"), [], vystup)
+
+    def test_netrackovany_soubor_bez_novy_je_chyba(self) -> None:
+        self.vyrob_soubor("plan.md")
+        p = self.napis_brief("01-alfa", soubory=("plan.md",))
+        chyby, _ = chip_lint.zkontroluj_cesty(self.nacti(p))
+        self.assertEqual(len(chyby), 1, chyby)
+        self.assertIn("ne v HEAD", chyby[0])
+        self.assertIn("# nový", chyby[0])
+        kod, _ = self.spust()
+        self.assertEqual(kod, 1)
+
+    def test_commitnuty_soubor_s_novy_varuje(self) -> None:
+        p = self.napis_brief("01-alfa", soubory=("modul.py    # nový",))
+        chyby, varovani = chip_lint.zkontroluj_cesty(self.nacti(p))
+        self.assertEqual(chyby, [])
+        self.assertEqual(len(varovani), 1, varovani)
+        self.assertIn("v HEAD už existuje", varovani[0])
+
+    def test_commitnuty_soubor_a_adresar_projdou(self) -> None:
+        p = self.napis_brief("01-alfa", soubory=("modul.py", "src"))
+        self.assertEqual(chip_lint.zkontroluj_cesty(self.nacti(p)), ([], []))
+
+    def test_smazany_z_disku_ale_v_head_porad_existuje(self) -> None:
+        # pro chip, který větví z HEAD, soubor existuje — pracovní strom nerozhoduje
+        (self.repo / "modul.py").unlink()
+        p = self.napis_brief("01-alfa", soubory=("modul.py",))
+        self.assertEqual(chip_lint.zkontroluj_cesty(self.nacti(p)), ([], []))
+
+    def test_neexistujici_nikde_je_chyba(self) -> None:
+        p = self.napis_brief("01-alfa", soubory=("nikde.py",))
+        chyby, _ = chip_lint.zkontroluj_cesty(self.nacti(p))
+        self.assertEqual(len(chyby), 1, chyby)
+        self.assertIn("neexistuje", chyby[0])
+
+    def test_bez_commitu_rozhoduje_disk(self) -> None:
+        cerstvy = self.tmp / "cerstvy"
+        cerstvy.mkdir()
+        subprocess.run(["git", "init", "-q", str(cerstvy)], check=True, capture_output=True)
+        (cerstvy / "modul.py").write_text("", encoding="utf-8")
+        p = self.napis_brief("01-alfa", soubory=("modul.py",), repo=cerstvy.as_posix())
+        self.assertEqual(chip_lint.zkontroluj_cesty(self.nacti(p)), ([], []))
+
+    def test_cache_se_pta_gitu_jednou_na_strom(self) -> None:
+        p = self.napis_brief("01-alfa", soubory=("modul.py",))
+        cache: dict = {}
+        with patch.object(chip_lint, "soubory_v_head",
+                          wraps=chip_lint.soubory_v_head) as volani:
+            chip_lint.zkontroluj_cesty(self.nacti(p), cache)
+            chip_lint.zkontroluj_cesty(self.nacti(p), cache)
+        self.assertEqual(volani.call_count, 1)
+        self.assertEqual(list(cache), [self.repo])
 
 
 if __name__ == "__main__":

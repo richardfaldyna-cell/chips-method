@@ -1,0 +1,37 @@
+name: tests
+
+# The workflow runs LITERALLY the commands from the "Ověření (brána)" section of
+# this repo's briefs. The only allowed deviation is installing `markdown`:
+# without it `tests/test_md2html.py` does not even import and the suite dies
+# with ModuleNotFoundError. If CI ever drifted from the gate, a green build
+# would stop meaning "the gate passed".
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # The project's only dependency; the core stays dependency-free.
+      - name: install markdown
+        run: python -m pip install --disable-pip-version-check markdown
+
+      - name: unittest
+        run: python -m unittest discover -s tests
+
+      - name: chip_lint
+        run: python tools/chip_lint.py

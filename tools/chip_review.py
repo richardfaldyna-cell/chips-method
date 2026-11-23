@@ -20,9 +20,9 @@ jakou u placeholderů v `chip_lint.py` řešil chip 15, a stejné řešení: hl�
 úžeji, ne tišeji.
 
 Použití:
-    python tools/chip_review.py 07                    # podklady o chipu 07
+    python tools/chip_review.py 07                    # podklady o chipu 07 (celá větev)
     python tools/chip_review.py 07 --repo C:/projekt  # chip v cizím repu
-    python tools/chip_review.py 07 --commit main..HEAD
+    python tools/chip_review.py 07 --commit HEAD      # jen poslední commit
     python tools/chip_review.py 07 --zadani           # zadání pro reviewer agenta
 """
 
@@ -176,6 +176,46 @@ def zmeny(repo: Path, rozsah: str = "HEAD") -> list[Zmena]:
 def ref_konce(rozsah: str) -> str:
     """Konec rozsahu — z `main..HEAD` je to `HEAD` (odtud se čte obsah souborů)."""
     return rozsah.split("..")[-1] or "HEAD"
+
+
+def vychozi_rozsah(repo: Path, hlavni: Path | None = None) -> tuple[str, str]:
+    """`(rozsah, důvod)` pro review bez `--commit`: celá větev chipu.
+
+    Chip zřídka končí jedním commitem — kola review přidávají opravné commity —
+    a review samotného `HEAD` pak posuzuje poslední opravu, ne chip („commit
+    nemění žádný testovací soubor" o chipu, který přidal pět testovacích
+    souborů; chip 36). Větev se měří od merge-base s hlavní linií, nalezenou
+    jako první z: HEAD hlavního stromu z `repo:` (když review běží ve worktree
+    chipu), `master`, `main`, `origin/HEAD`. Když HEAD hlavní linie *je*
+    (merge-base == HEAD) nebo žádný kandidát není, rozsah zůstává `HEAD`
+    a důvod říká proč — čtenář musí vědět, co se měřilo.
+    """
+    kod, head = _git(repo, "rev-parse", "--verify", "--quiet", "HEAD")
+    if kod != 0:
+        return "HEAD", "repo nemá HEAD"
+    head = head.strip()
+
+    kandidati: list[tuple[str, str]] = []
+    if hlavni is not None and hlavni.is_dir() and hlavni.resolve() != repo.resolve():
+        kod, sha = _git(hlavni, "rev-parse", "--verify", "--quiet", "HEAD")
+        if kod == 0 and sha.strip():
+            kandidati.append((sha.strip(), f"HEAD hlavního stromu {hlavni}"))
+    # Lokální hlavní větve před vzdálenou: orchestrátor merguje do lokální
+    # větve, takže z té chip větvil; remote může být pozadu a započítal by
+    # orchestrátorovy vlastní commity jako práci chipu.
+    kandidati += [("master", "master"), ("main", "main")]
+    kod, ref = _git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    if kod == 0 and ref.strip():
+        kandidati.append((ref.strip(), ref.strip()))
+
+    for ref, popis in kandidati:
+        kod, zaklad = _git(repo, "merge-base", "HEAD", ref)
+        zaklad = zaklad.strip()
+        if kod != 0 or not zaklad or zaklad == head:
+            continue
+        return f"{zaklad[:12]}..HEAD", f"merge-base s {popis}"
+    return "HEAD", ("jen HEAD — není hlavní větev, od které by se větev měřila; "
+                    "víc ukáže --commit <základ>..HEAD")
 
 
 def obsah(repo: Path, cesta: str, ref: str = "HEAD") -> str | None:
@@ -509,8 +549,9 @@ def main(argv: list[str] | None = None) -> int:
         description="Nezávislé podklady o hotovém chipu (nerozhoduje o merge).")
     ap.add_argument("cislo", help="číslo chipu, např. 07")
     ap.add_argument("--repo", help="kořen repa, kde chip běžel (default: podle briefu)")
-    ap.add_argument("--commit", default="HEAD", metavar="REF",
-                    help="commit nebo rozsah ke kontrole (default: HEAD, jde i main..HEAD)")
+    ap.add_argument("--commit", default=None, metavar="REF",
+                    help="commit nebo rozsah ke kontrole (default: celá větev chipu, "
+                         "merge-base..HEAD; HEAD = jen poslední commit)")
     ap.add_argument("--zadani", action="store_true",
                     help="vypsat jen zadání pro reviewer agenta")
     pridej_arg_dir(ap)
@@ -535,21 +576,25 @@ def main(argv: list[str] | None = None) -> int:
         print("=" * 72)
         return 0
 
+    if args.commit:
+        rozsah, duvod = args.commit, "--commit"
+    else:
+        rozsah, duvod = vychozi_rozsah(repo, chip.repo_path())
     try:
-        seznam = zmeny(repo, args.commit)
+        seznam = zmeny(repo, rozsah)
     except GitChyba as e:
         print(f"! {e}")
         return 1
 
     print(f"  REVIEW chip {chip.id} — {chip.nazev}   ({repo})")
     print(f"  brief: {chip.path.name}   stav: {chip.stav}   "
-          f"issues: {len(chip.hotove_issues())}/{len(chip.issues())} hotových   "
-          f"rozsah: {args.commit}\n")
+          f"issues: {len(chip.hotove_issues())}/{len(chip.issues())} hotových")
+    print(f"  rozsah: {rozsah}   ({duvod})\n")
 
     signaly: list[Signal] = []
     for radky, s in (sekce_soubory(seznam),
                      sekce_rozsah(chip, seznam),
-                     sekce_testy(repo, seznam, ref_konce(args.commit)),
+                     sekce_testy(repo, seznam, ref_konce(rozsah)),
                      sekce_dod(chip), sekce_pomer(seznam)):
         print("\n".join(radky))
         print()

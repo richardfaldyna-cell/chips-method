@@ -56,6 +56,13 @@ class TestDeploy(InitCase):
     def test_hook_path_is_relative_and_resolves_to_the_real_hook(self) -> None:
         self.run_init()
         command = self.chips_hooks()[0]["command"]
+        if self.repo.resolve().drive != chip_init.HOOK.resolve().drive:
+            # Windows with the temp dir and the CHIPS checkout on different drives
+            # (GitHub runners: C: vs D:) - no relative path exists, the absolute
+            # one is registered and the user is warned.
+            self.assertIn(chip_init.HOOK.resolve().as_posix(), command)
+            self.assertTrue(any("different drives" in line for line in self.lines))
+            return
         self.assertIn("$CLAUDE_PROJECT_DIR/", command)
         rel = command.split("$CLAUDE_PROJECT_DIR/", 1)[1].split('"', 1)[0]
         resolved = (self.repo / rel).resolve()

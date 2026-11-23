@@ -111,6 +111,10 @@ se bere jako součást jména, aby se cesta <code>docs/plan #1.md</code> neusekl
 python -m build
 python smoke_test.py
 </code></pre>
+<p>Tag bloku určuje shell, ve kterém příkazy běží: <code>```bash</code> běží v bashi<br />
+(na Windows Git Bash), <code>```cmd</code> v cmd.exe (jen Windows), bez tagu<br />
+systémový shell. Piš příkazy pro shell, kterým blok označíš — <code>&amp;&amp;</code>, <code>||</code><br />
+a <code>$VAR</code> jsou bash, <code>%VAR%</code> je cmd.</p>
 <h2 id="eskalace-co-nerozhodovat-sam-t3">Eskalace — co NEROZHODOVAT sám (T3)</h2>
 <p>Při zásahu do čehokoli z tohoto seznamu: <strong>zastav, otevři PR s otázkou, nehádej.</strong></p>
 <ul>

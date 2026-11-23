@@ -46,6 +46,7 @@ from pathlib import Path
 
 from chip_common import (ROOT, nacti_vse, nastav_chips_dir, prepis_stav,
                          pridej_arg_dir, utf8_vystup)
+from chip_lint import git_koren
 
 ZADANI = """\
 Jsi orchestrátor pro CHIP {id} — {nazev}.
@@ -403,6 +404,21 @@ def cesty(chip) -> tuple[Path | None, str, Path]:
     return repo, vetev, worktree
 
 
+def strom_nad(worktree: Path) -> Path | None:
+    """Kořen git stromu, UVNITŘ kterého by worktree vznikl, nebo None.
+
+    „Vedle repa" (`worktree: ../x-chip-NN`) je uvnitř RODIČOVSKÉHO repa, když
+    je repo chipu vnořené do jiného — worktree pak v rodiči leží jako
+    netrackovaný adresář, jeden `git add -A` od commitu (chip 36, vnořené repo
+    v home-labu). Totéž platí pro worktree uvnitř vlastního repa. Jde nahoru od
+    nejbližšího existujícího předka, protože adresář worktree ještě neexistuje.
+    """
+    p = worktree.parent
+    while not p.exists() and p.parent != p:
+        p = p.parent
+    return git_koren(p)
+
+
 def zadani(chip, worktree: Path, vetev: str, od: str | None = None,
            brief: Path | None = None) -> str:
     """Text zadání pro nové okno (šablona `ZADANI` vyplněná daty chipu).
@@ -493,6 +509,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.uklid:
         return uklid(repo, worktree, vetev, cislo,
                      dry=args.dry_run, presto=args.presto)
+
+    # Odmítá se i v --dry-run: smysl náhledu je ukázat, co BY se stalo, a stalo
+    # by se, že worktree vznikne uvnitř cizího git stromu.
+    cizi = strom_nad(worktree)
+    if cizi is not None:
+        kde = ("uvnitř vlastního repa chipu" if cizi == repo.resolve()
+               else f"uvnitř jiného git stromu ({cizi})")
+        navrh = (cizi.parent / f"{repo.name}-chip-{cislo}").as_posix()
+        print(f"! worktree {worktree} by ležel {kde} — objevil by se tam jako "
+              f"netrackovaný adresář, jeden 'git add -A' od commitu.")
+        print(f"  Napiš do {chip.path.name} absolutní 'worktree:' mimo ten strom, "
+              f"např.:  worktree: {navrh}")
+        return 1
 
     if not args.dry_run:
         if chip.stav != "ready":

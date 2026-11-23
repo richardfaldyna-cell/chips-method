@@ -262,7 +262,7 @@ per round, and <code>queue.md</code> with the class C findings for one follow-up
 │   └── vlna-4-preruseno.md        # what survives an interrupted wave (Czech)
 ├── integrations/
 │   └── claude-code/    # review loop: agents/chip-critic.md, agents/chip-judge.md, skills/chip-review-loop/
-├── tests/              # 757 tests, stdlib unittest
+├── tests/              # 815 tests, stdlib unittest
 └── tools/
     ├── chip_new.py     # creates a chip from the template
     ├── chip_slice.py   # slices a list of issues into chip proposals
@@ -292,11 +292,11 @@ per round, and <code>queue.md</code> with the class C findings for one follow-up
 <tbody>
 <tr>
 <td>chips in total</td>
-<td>27/27 merged, 0 <code>blocked</code></td>
+<td>28/28 merged, 0 <code>blocked</code></td>
 </tr>
 <tr>
 <td>tests</td>
-<td>0 → <strong>757</strong></td>
+<td>0 → <strong>815</strong></td>
 </tr>
 <tr>
 <td>edits outside the claimed files</td>
@@ -343,6 +343,16 @@ merge through). Chip 33 was the first chip reviewed by its own loop: two<br />
 rounds, two B findings accepted and fixed, verdict <code>COMPLETE</code>. The numbering gap<br />
 26–32 is a wave that translated the tools' interface to English in the<br />
 development repo and is not part of this release.</p>
+<p><strong>Chip 36 (2026-10-25).</strong> The first deployment over one brief directory driving<br />
+18 chips across 13 nested repositories, on Windows, found five places where the<br />
+tools silently assumed one repo, one shell and a clean working tree. Lint<br />
+collisions are now compared anchored to each chip's <code>repo:</code> (176 false<br />
+collisions → 0), the gate runs each block in the shell its fence tag declares<br />
+(<code>```bash</code> → Git Bash, <code>```cmd</code> → cmd.exe, a missing shell<br />
+fails instead of falling back), <code>chip_review.py</code> measures the whole branch<br />
+instead of the last commit, claimed paths are checked against HEAD instead of<br />
+the working tree, and <code>chip_run.py</code> refuses a worktree that would land inside<br />
+another git tree.</p>
 <p><strong>Next step:</strong> deployment on a real company project.</p>
 <hr />
 <h2 id="glossary-of-czech-flags-and-terms">Glossary of Czech flags and terms</h2>

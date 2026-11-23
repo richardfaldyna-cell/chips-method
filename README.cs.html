@@ -249,7 +249,7 @@ anglicky.</p>
 │   └── vlna-4-preruseno.md        # co vydrží přerušení vlny (a jak ji dokončit)
 ├── integrations/
 │   └── claude-code/    # review smyčka: agents/chip-critic.md, agents/chip-judge.md, skills/chip-review-loop/
-├── tests/              # 757 testů, stdlib unittest
+├── tests/              # 815 testů, stdlib unittest
 └── tools/
     ├── chip_new.py     # založí chip z šablony
     ├── chip_slice.py   # nakrájí seznam issues na návrhy chipů
@@ -279,11 +279,11 @@ anglicky.</p>
 <tbody>
 <tr>
 <td>chipy celkem</td>
-<td>27/27 merged, 0 <code>blocked</code></td>
+<td>28/28 merged, 0 <code>blocked</code></td>
 </tr>
 <tr>
 <td>testy</td>
-<td>0 → <strong>757</strong></td>
+<td>0 → <strong>815</strong></td>
 </tr>
 <tr>
 <td>zásahy mimo nárokované soubory</td>
@@ -328,6 +328,15 @@ pustil). Chip 33 byl první chip prověřený vlastní smyčkou: dvě kola, dva 
 B přijaté a opravené, verdikt <code>COMPLETE</code>. Mezera v číslování 26–32 je vlna,<br />
 která ve vývojovém repu přeložila rozhraní nástrojů do angličtiny a není součástí<br />
 tohoto vydání.</p>
+<p><strong>Chip 36 (2026-10-25).</strong> První nasazení, kde jeden adresář briefů řídí 18 chipů<br />
+přes 13 vnořených repozitářů, na Windows, odhalilo pět míst, kde nástroje mlčky<br />
+předpokládaly jedno repo, jeden shell a čistý pracovní strom. Kolize v lintu se<br />
+teď porovnávají ukotvené k <code>repo:</code> každého chipu (176 falešných kolizí → 0),<br />
+brána spouští každý blok v shellu podle jeho tagu (<code>```bash</code> → Git Bash,<br />
+<code>```cmd</code> → cmd.exe, chybějící shell shodí příkaz místo tichého<br />
+fallbacku), <code>chip_review.py</code> měří celou větev místo posledního commitu, existence<br />
+nároků se ověřuje proti HEAD místo pracovního stromu a <code>chip_run.py</code> odmítne<br />
+worktree, který by přistál uvnitř jiného git stromu.</p>
 <p><strong>Další krok:</strong> nasazení na reálný firemní projekt. Viz <a href="TODO.md">TODO.md</a>.</p>
 <hr />
 <h2 id="licence">Licence</h2>

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -54,20 +55,108 @@ def id_z_vetve(vetev: str) -> str | None:
     return m.group(1).zfill(2) if m else None
 
 
-def prikazy(c) -> list[str]:
-    """Příkazy brány z ``` bloku sekce „Ověření (brána)".
+# Tag ``` bloku -> shell. Šablona píše ```bash, takže autor briefu docela
+# rozumně používá bash syntaxi (`&&`, `||`, `$VAR`, `|| exit 1`). `shell=True`
+# je na Windows cmd.exe, který tu syntaxi čte jinak — a často přesto skončí 0,
+# takže brána vypadala zelená, ačkoli nic neověřila (chip 36). Tag je autorovo
+# prohlášení, v jakém jazyce blok je, proto rozhoduje tag. Bez tagu nebo
+# s neznámým tagem zůstává systémový shell přesně jako dřív.
+SHELL_TAGY = {"bash": "bash", "sh": "bash", "shell": "bash", "zsh": "bash",
+              "cmd": "cmd", "bat": "cmd", "batch": "cmd"}
+
+
+def shell_bloku(tag: str) -> str | None:
+    """Shell ``` bloku podle jeho info řetězce: `bash`, `cmd` nebo None."""
+    slova = (tag or "").strip().split()
+    return SHELL_TAGY.get(slova[0].lower()) if slova else None
+
+
+def bloky(c) -> list[tuple[str | None, list[str]]]:
+    """``` bloky sekce brány jako dvojice (shell, příkazy).
 
     Komentáře a prázdné řádky se ignorují. Když sekce žádný blok nemá, vrací
     prázdný seznam — a chip bez definované brány se nesmí mergovat automaticky.
     """
     text = c.najdi("overeni brana") or ""
-    out: list[str] = []
-    for blok in re.findall(r"```[^\n]*\n(.*?)```", text, re.S):
-        for radek in blok.splitlines():
-            radek = radek.strip()
-            if radek and not radek.startswith("#"):
-                out.append(radek)
+    out: list[tuple[str | None, list[str]]] = []
+    for tag, blok in re.findall(r"```([^\n]*)\n(.*?)```", text, re.S):
+        radky = [r.strip() for r in blok.splitlines()]
+        out.append((shell_bloku(tag), [r for r in radky if r and not r.startswith("#")]))
     return out
+
+
+def prikazy_se_shellem(c) -> list[tuple[str | None, str]]:
+    """Příkazy brány se shellem, který jejich blok deklaruje — to spouští `brana`."""
+    return [(shell, prikaz) for shell, radky in bloky(c) for prikaz in radky]
+
+
+def prikazy(c) -> list[str]:
+    """Příkazy brány z ``` bloků sekce „Ověření (brána)" (bez shellu).
+
+    Zůstává kvůli `chip_review`, které příkazy jen počítá a vypisuje.
+    """
+    return [prikaz for _, prikaz in prikazy_se_shellem(c)]
+
+
+def najdi_bash() -> str | None:
+    """Cesta k použitelnému bashi, nebo None.
+
+    `CHIPS_BASH` má přednost. Na Windows je další kandidát bash z Git for
+    Windows vedle `git.exe` (`<Git>/bin/bash.exe`) — pro ten byl ```bash blok
+    psaný; `shutil.which("bash")` je poslední možnost a `System32\\bash.exe`
+    se odmítá: to je spouštěč WSL, jiný operační systém s jinými cestami.
+    """
+    env = os.environ.get("CHIPS_BASH", "").strip()
+    if env and Path(env).is_file():
+        return env
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            koren = Path(git).resolve().parent.parent
+            for kandidat in (koren / "bin" / "bash.exe",
+                             koren / "usr" / "bin" / "bash.exe"):
+                if kandidat.is_file():
+                    return str(kandidat)
+    nalezen = shutil.which("bash")
+    if nalezen and os.name == "nt" and "system32" in nalezen.lower():
+        return None
+    return nalezen
+
+
+class ShellNenalezen(Exception):
+    """Shell bloku tu není k dispozici — příkaz nejde spustit.
+
+    Výjimka, ne fallback na systémový shell: ```bash brána spuštěná v cmd.exe
+    je přesně ta falešná zelená, kterou chip 36 odstraňuje. Text je hláška
+    PRO UŽIVATELE a říká, co udělat.
+    """
+
+
+def argv_shellu(shell: str | None, prikaz: str) -> tuple[list[str] | str, bool]:
+    """`(args, use_shell)` pro `Popen` podle shellu bloku.
+
+    `None` = systémový shell (`shell=True`), jak to bylo vždy. `bash` běží přes
+    `bash -c`; na POSIXu bez bashe padá na `/bin/sh` přes `shell=True`, který
+    `&&`, `||` i `$VAR` čte stejně. `cmd` znamená cmd.exe a existuje jen na
+    Windows.
+    """
+    if shell == "bash":
+        bash = najdi_bash()
+        if bash is not None:
+            return [bash, "-c", prikaz], False
+        if os.name != "nt":
+            return prikaz, True
+        raise ShellNenalezen(
+            "bash nenalezen — blok brány je označený ```bash. Nainstaluj Git for "
+            "Windows (má bin/bash.exe), nastav CHIPS_BASH na cestu k bash.exe, nebo "
+            "blok označ ```cmd a napiš ho pro cmd.exe.")
+    if shell == "cmd":
+        if os.name == "nt":
+            return prikaz, True
+        raise ShellNenalezen(
+            "blok brány je označený ```cmd, ten běží jen na Windows — označ ho "
+            "```bash a napiš ho pro POSIX shell.")
+    return prikaz, True
 
 
 def kill_tree(p: subprocess.Popen) -> None:
@@ -92,13 +181,23 @@ def kill_tree(p: subprocess.Popen) -> None:
         pass
 
 
-def spust(repo: Path, prikaz: str, timeout: int = 600) -> tuple[int, str]:
-    """Spustí jeden příkaz brány v kořeni repa; vrací (kód, výstup)."""
+def spust(repo: Path, prikaz: str, timeout: int = 600,
+          shell: str | None = None) -> tuple[int, str]:
+    """Spustí jeden příkaz brány v kořeni repa; vrací (kód, výstup).
+
+    `shell` je shell bloku z `prikazy_se_shellem` (`bash`, `cmd` nebo None pro
+    systémový shell). Shell, který tu není k dispozici, vrátí 127 s hláškou ze
+    `ShellNenalezen` — příkaz se nespustí.
+    """
+    try:
+        args, pres_shell = argv_shellu(shell, prikaz)
+    except ShellNenalezen as e:
+        return 127, str(e)
     # Vlastní skupina procesů / session, aby `kill_tree` dosáhl i na potomky.
     skupina = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
                else {"start_new_session": True})
     try:
-        p = subprocess.Popen(prikaz, cwd=str(repo), shell=True,
+        p = subprocess.Popen(args, cwd=str(repo), shell=pres_shell,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True, encoding="utf-8", errors="replace", **skupina)
     except OSError as e:                                  # pragma: no cover
@@ -134,12 +233,12 @@ def brana(c, repo: Path, deadline: float | None = None) -> tuple[bool, list[str]
     sama a ohlásí neúspěch; vyčerpaný čas nikdy nevrátí `True`.
     """
     hlaseni: list[str] = []
-    seznam = prikazy(c)
+    seznam = prikazy_se_shellem(c)
     if not seznam:
         return False, [f"{c.path.name}: sekce 'Ověření (brána)' nemá žádný příkaz "
                        f"— chip bez brány se nemerguje"]
 
-    for prikaz in seznam:
+    for shell, prikaz in seznam:
         timeout = COMMAND_TIMEOUT
         if deadline is not None:
             zbyva = int(deadline - time.monotonic())
@@ -147,7 +246,7 @@ def brana(c, repo: Path, deadline: float | None = None) -> tuple[bool, list[str]
                 hlaseni.append(f"  X   {prikaz}   (nespuštěno — {ROZPOCET_VYCERPAN})")
                 return False, hlaseni
             timeout = min(timeout, zbyva)
-        kod, vystup = spust(repo, prikaz, timeout)
+        kod, vystup = spust(repo, prikaz, timeout, shell)
         if kod == 124 and deadline is not None and timeout < COMMAND_TIMEOUT:
             hlaseni.append(f"  X   {prikaz}   ({ROZPOCET_VYCERPAN} po {timeout}s)")
             return False, hlaseni

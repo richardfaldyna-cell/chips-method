@@ -68,6 +68,19 @@ and in both cases the chip's slice is built on something that isn't there. The
 `# nový` (new) marker is the only exception and is deliberately explicit: you
 have to write it, not rely on it.
 
+"Exists" means **committed in HEAD**, not lying in the working tree. The chip's
+worktree branches from HEAD, so a file you created but have not committed is
+not there for the chip: claiming it without `# nový` is an error, claiming it
+with `# nový` is correct and raises no warning. This is the same rule as "commit
+before `chip_run.py`", checked by the tool instead of remembered by you.
+
+**Claims are compared anchored to `repo:`.** One brief directory may drive
+several repositories (`--dir` over a project with nested repos), and
+`README.md` in repo A is not `README.md` in repo B — the lint compares
+`<repo>/<claim>`, not the bare claim. The same file reached through two repos
+still collides: `sub/README.md` claimed in the parent repo and `README.md`
+claimed in the nested repo `sub/` are one path.
+
 > A pattern also covers files that don't exist yet. `src/*.py` in one chip
 > therefore collides with `src/new.py  # nový` in another, even though that file
 > doesn't exist yet.
@@ -141,6 +154,13 @@ git worktree add ../repo-chip-01 -b ai/chip-01/parser-refactor
 
 Every window works in its own folder, on its own branch, with its own index.
 Merging happens at the end and git handles any conflict normally and visibly.
+
+The worktree lives **outside every git tree**. "Next to the repo"
+(`worktree: ../repo-chip-01`) is the right default for a top-level repo and the
+wrong one for a repo nested inside another: the worktree would land in the
+parent repo as an untracked directory, one `git add -A` away from being
+committed. `chip_run.py` refuses such a location and tells you what absolute
+`worktree:` to write instead.
 
 Claude Code has `EnterWorktree` for this (for a session) and subagents take the
 `isolation: "worktree"` parameter. `tools/chip_run.py` does it for you.
@@ -219,6 +239,14 @@ pytest -q                    # tests
 python -m build              # build
 python smoke_test.py         # smoke test against real data
 ```
+
+The commands run in the shell the fence tag declares: ```` ```bash ```` in bash
+(on Windows the Git Bash next to `git.exe`, `CHIPS_BASH` to override),
+```` ```cmd ```` in cmd.exe, no tag in the system shell. The tag is the author's
+declaration of the language, so it decides — before chip 36 every gate on
+Windows ran in cmd.exe, where `a && b || exit 1` means something else and often
+still exits 0, a green gate that had checked nothing. A shell that is not
+available fails the command; it never falls back to another one.
 
 Three levels of enforcement, weakest to strongest:
 
@@ -498,7 +526,10 @@ none of it, because everything was consistent *inside* the author's reasoning.
 The `chip_review.py` tool does the mechanical part (the scope of changes
 against the claim, tests without asserts, the DoD against the gate commands) and
 `--zadani` (assignment) prints the brief for the agent. **It gives no verdict** —
-it collects material.
+it collects material. It measures **the whole branch** (`merge-base..HEAD`
+against the main line) and prints the range it used; a chip rarely ends in one
+commit, and a review of the last fix alone is a review of the fix, not of the
+chip.
 
 **Where to stop.** The chain chip → review → chip → review → chip is serial by
 nature and took over an hour. Each layer found something new, but the yield
