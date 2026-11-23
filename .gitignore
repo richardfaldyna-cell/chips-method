@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 
+# Osobni vrstva nastaveni Claude Code; trackovany je jen .claude/settings.json
+# s registraci hooku brany.
+.claude/settings.local.json
+
 # HTML se generuje z .md pres tools/md2html.py --all
 # (verzovane zamerne - konvence workspace)
 

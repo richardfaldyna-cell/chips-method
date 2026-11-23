@@ -67,7 +67,9 @@ runs autonomously, and may be merged only after it passes an automated gate.</p>
 The tools' command-line flags, messages and identifiers, the chip briefs in<br />
 <code>chips/</code> and the pilot write-ups in <code>docs/</code> are in Czech — they are the<br />
 historical record of the pilots that shaped the method. A glossary of the<br />
-flags you will meet is at the end of this file.</p>
+flags you will meet is at the end of this file. The newer additions written<br />
+for outside users — <code>chip_init.py</code>, <code>chip_install.py</code> and the review loop in<br />
+<code>integrations/</code> — are in English.</p>
 </blockquote>
 <hr />
 <h2 id="the-problem-it-solves">The problem it solves</h2>
@@ -162,6 +164,53 @@ python tools/chip_run.py 01 --uklid
 <p>Without <code>--spustit</code> you open the created worktree in a new Claude Code window<br />
 yourself and paste in the printed assignment. Details:<br />
 <a href="docs/methodology.md">docs/methodology.md</a>.</p>
+<h3 id="deploy-into-your-repository-the-gate-hook">Deploy into your repository: the gate hook</h3>
+<p>Cloning this repo gives you the tools; it does <strong>not</strong> give you the gate.<br />
+Rule 3 is enforced by a <code>PreToolUse</code> hook that must be registered in the repo<br />
+where the chips run, and skipping that step is invisible — the gate looks like<br />
+it exists and never runs. One command does the whole deployment and then<br />
+<strong>proves the hook rejects</strong>:</p>
+<pre><code class="language-bash">python tools/chip_init.py /path/to/your/repo          # --check to only report
+</code></pre>
+<p>It creates <code>&lt;repo&gt;/chips/</code>, registers the hook in <code>&lt;repo&gt;/.claude/settings.json</code><br />
+(merged into what is there, with a path relative to <code>$CLAUDE_PROJECT_DIR</code>),<br />
+installs the review loop into <code>~/.claude</code> (see below) and feeds the hook a merge<br />
+of <code>ai/chip-99/does-not-exist</code> and an ordinary merge, checking both decisions.<br />
+Running it again changes nothing. Flags: <code>--check</code> (report, write nothing),<br />
+<code>--global</code> (register in <code>~/.claude/settings.json</code> with an absolute path, for<br />
+sessions whose root is not the repo), <code>--no-review</code>, <code>--hook-timeout N</code><br />
+(default 600 s, minimum 90).</p>
+<p>By hand, this is the registration it writes:</p>
+<pre><code class="language-json">{
+  &quot;hooks&quot;: {
+    &quot;PreToolUse&quot;: [
+      {
+        &quot;matcher&quot;: &quot;Bash|PowerShell&quot;,
+        &quot;hooks&quot;: [
+          {
+            &quot;type&quot;: &quot;command&quot;,
+            &quot;command&quot;: &quot;python \&quot;$CLAUDE_PROJECT_DIR/../CHIPS/tools/hook_chip_gate.py\&quot; --budget 540&quot;,
+            &quot;shell&quot;: &quot;bash&quot;,
+            &quot;timeout&quot;: 600
+          }
+        ]
+      }
+    ]
+  }
+}
+</code></pre>
+<p><strong><code>--budget</code> must be shorter than <code>timeout</code>.</strong> When a hook runs past its<br />
+<code>timeout</code>, Claude Code treats it as a non-blocking error and runs the command<br />
+anyway — a gate slower than the timeout would let the merge through unverified.<br />
+With <code>--budget N</code> the hook stops the gate itself after N seconds and rejects the<br />
+merge, so keep <code>budget = timeout - 60</code>. Without <code>--budget</code> the hook uses 240 s,<br />
+which stays under an older <code>"timeout": 300</code>. Size both to your slowest gate (the<br />
+full test suite of this repo takes several minutes on Windows);<br />
+<code>chip_init.py --hook-timeout N</code> writes the pair for you.</p>
+<p>What <code>chip_init.py</code> cannot prove is that Claude Code actually runs the hook.<br />
+Restart the session in the repo and try <code>git merge ai/chip-99/does-not-exist</code>:<br />
+it must be rejected with a CHIPS message, while <code>git merge some-ordinary-branch</code><br />
+must fail only with git's own <code>not something we can merge</code>.</p>
 <p><strong>In a third-party repo that must stay clean</strong>, keep the briefs elsewhere<br />
 (<code>--dir &lt;path&gt;</code> or <code>CHIPS_DIR</code>) and register the repo with the gate through a<br />
 single untracked file:</p>
@@ -178,6 +227,30 @@ python tools/chip_slice.py --todo TODO.md --zapsat chips/
 # material for an independent reviewer of a finished chip
 python tools/chip_review.py 01
 </code></pre>
+<h3 id="the-review-loop-claude-code-optional">The review loop (Claude Code, optional)</h3>
+<p>A green gate proves the chip's tests pass, not that they would notice a broken<br />
+chip. The review loop puts two fresh subagents between the gate and the merge: a<br />
+<strong>critic</strong> that hunts for gaps against the brief (and may mutate code temporarily<br />
+to see whether a test fails) and a <strong>judge</strong> that checks the critic's citations<br />
+and returns one verdict — at most three rounds, and it never merges. Why and<br />
+when: <a href="docs/methodology.md">docs/methodology.md</a>, section "The review loop".</p>
+<pre><code class="language-bash">python tools/chip_install.py            # into ~/.claude — every project on this machine
+python tools/chip_install.py --target /path/to/repo/.claude   # one project only
+python tools/chip_install.py --check    # after `git pull`: exit 1 when a copy is missing, old or edited
+</code></pre>
+<p>The tool writes <code>agents/chip-critic.md</code>, <code>agents/chip-judge.md</code> and<br />
+<code>skills/chip-review-loop/SKILL.md</code> from <code>integrations/claude-code/</code>, with the<br />
+absolute path of this clone's <code>tools/</code> filled in. Each installed file ends with a<br />
+stamp of its content: a copy nobody touched is updated in place, a copy you<br />
+edited by hand is refused (<code>--force</code> overrides). Restart the Claude Code session,<br />
+check that <code>/agents</code> lists <code>chip-critic</code> and <code>chip-judge</code>, then call it from the<br />
+orchestrating session once the chip's gate is green:</p>
+<pre><code>/chip-review-loop 07
+/chip-review-loop 07 --dir path/to/briefs     # briefs outside ./chips
+</code></pre>
+<p>The rounds are recorded in <code>.git/chips-review/07/</code> of the chip's repo (never<br />
+committed, survives <code>--uklid</code>): the evidence, the critic's and the judge's JSON<br />
+per round, and <code>queue.md</code> with the class C findings for one follow-up chip.</p>
 <hr />
 <h2 id="layout">Layout</h2>
 <pre><code>CHIPS/
@@ -187,7 +260,9 @@ python tools/chip_review.py 01
 │   ├── metodika.md     # the same, in Czech (source of truth)
 │   ├── konverzace-2026-07-25.md   # origin of the project, the original discussion (Czech)
 │   └── vlna-4-preruseno.md        # what survives an interrupted wave (Czech)
-├── tests/              # 693 tests, stdlib unittest
+├── integrations/
+│   └── claude-code/    # review loop: agents/chip-critic.md, agents/chip-judge.md, skills/chip-review-loop/
+├── tests/              # 757 tests, stdlib unittest
 └── tools/
     ├── chip_new.py     # creates a chip from the template
     ├── chip_slice.py   # slices a list of issues into chip proposals
@@ -198,6 +273,8 @@ python tools/chip_review.py 01
     ├── chip_gate.py    # runs a chip's gate in its worktree
     ├── hook_chip_gate.py  # PreToolUse hook: merge only after a green gate
     ├── chip_review.py  # material for an independent reviewer
+    ├── chip_init.py    # deploy CHIPS into a repo: briefs dir, gate hook, review loop, self-test
+    ├── chip_install.py # install the review loop into ~/.claude (or a project's .claude)
     ├── chip_common.py  # brief parser (shared base)
     └── md2html.py      # .md → .html (workspace convention)
 </code></pre>
@@ -208,18 +285,18 @@ python tools/chip_review.py 01
 <table>
 <thead>
 <tr>
-<th></th>
+<th>metric</th>
 <th>result</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>chips in total</td>
-<td>24/24 merged, 0 <code>blocked</code></td>
+<td>27/27 merged, 0 <code>blocked</code></td>
 </tr>
 <tr>
 <td>tests</td>
-<td>0 → <strong>693</strong></td>
+<td>0 → <strong>757</strong></td>
 </tr>
 <tr>
 <td>edits outside the claimed files</td>
@@ -259,6 +336,13 @@ was needed — over five running chips it reported 177/192 issues done where<br 
 <code>chip_status.py</code>, reading the main tree, saw 140/192.</p>
 <p>What this means for your own slicing is in<br />
 <a href="docs/methodology.md">docs/methodology.md</a>, section "What the pilot showed".</p>
+<p><strong>Chips 33–35 (2026-10-16).</strong> The review loop (critic + judge as subagents,<br />
+<code>chip_install.py</code>), one-command deployment (<code>chip_init.py</code>) and the gate's time<br />
+budget (<code>--budget</code>: a hook that runs out of time rejects instead of letting the<br />
+merge through). Chip 33 was the first chip reviewed by its own loop: two<br />
+rounds, two B findings accepted and fixed, verdict <code>COMPLETE</code>. The numbering gap<br />
+26–32 is a wave that translated the tools' interface to English in the<br />
+development repo and is not part of this release.</p>
 <p><strong>Next step:</strong> deployment on a real company project.</p>
 <hr />
 <h2 id="glossary-of-czech-flags-and-terms">Glossary of Czech flags and terms</h2>

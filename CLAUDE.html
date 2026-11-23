@@ -62,7 +62,14 @@ and is merged only after passing an automated gate. Origin and rationale:<br />
 pilot write-ups are in Czech and stay that way — tests assert on them and the<br />
 briefs are a historical record. <code>README.md</code> and <code>docs/methodology.md</code> are<br />
 English; <code>README.cs.md</code> and <code>docs/metodika.md</code> are their Czech originals. When<br />
-a rule changes, change <strong>both</strong> language versions of the methodology.</p>
+a rule changes, change <strong>both</strong> language versions of the methodology.<br />
+Exception: files written for outside users since chip 33 — <code>tools/chip_init.py</code>,<br />
+<code>tools/chip_install.py</code>, their tests and everything under <code>integrations/</code> — are<br />
+English, code and user surface alike; keep them that way.</p>
+<p><strong>Relation to the development repo:</strong> this is the public release. The<br />
+development repo went through a wave (chips 26–32) that translated the tools'<br />
+interface to English; that wave is not here, so a change ported from there is<br />
+adapted to the Czech interface (e.g. <code>--uklid</code>, <code>stav:</code>), not copied.</p>
 <h2 id="what-applies-here">What applies here</h2>
 <ul>
 <li><strong>The methodology lives in <code>docs/metodika.md</code></strong> (source of truth) and its<br />
@@ -97,6 +104,12 @@ a rule changes, change <strong>both</strong> language versions of the methodolog
   agent wrote in its summary. The PreToolUse hook runs it once more at merge —<br />
   if you want to bypass it, stop and ask the user. After every merge run the<br />
   whole suite on the main branch — green in isolation is not green together.</li>
+<li><strong>The hook is registered on this repo itself</strong> in <code>.claude/settings.json</code><br />
+  (<code>timeout</code> 600 s, <code>--budget 540</code>). A gate that outruns the budget is rejected,<br />
+  not let through — if the suite grows past that, raise both numbers together.</li>
+<li><strong>Optional review before the merge:</strong> <code>/chip-review-loop NN</code> (install once<br />
+  with <code>python tools/chip_install.py</code>). It never merges and never switches<br />
+<code>stav:</code>; that stays with you.</li>
 <li>You switch the chip's state, not the agent. The chip's mandate is the Log<br />
   and the checkboxes.</li>
 </ul>

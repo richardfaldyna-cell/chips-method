@@ -304,6 +304,53 @@ issues and five states.
 **When the gate fails, the chip doesn't end in a merge but in an open PR.**
 That is the whole difference between "autonomous" and "unsupervised".
 
+### The review loop: after a green gate, before the merge
+
+A green gate proves the chip's own tests pass. It does not prove those tests
+would notice a broken chip — they were written by the same model as the code
+(see the reviewer role in section 9). The review loop is the optional step that
+checks exactly that, with two roles that did not write the code:
+
+| Role | Sees | May | Must not |
+|---|---|---|---|
+| **critic** | the brief, the diff, the evidence from `chip_review.py` | run the gate and the tests, break code temporarily to see whether a test fails (mutation), report findings with a `file:line` citation | fix anything, leave the worktree changed, commit, merge, touch the brief |
+| **judge** | the same plus the critic's findings | open every cited place and accept or reject the finding, return one verdict | add findings of its own, run commands, write files, decide the merge |
+
+Findings are graded **against the brief, not against taste**:
+
+- **A** — the chip is wrong against its own brief: a ticked DoD item that is not
+  true, a ticked issue without code, a test that survives a mutation, a file
+  outside the claim, a T3 item decided instead of escalated.
+- **B** — the brief is met but not defended: a DoD item nothing verifies, an
+  unhandled input the issues imply, an error swallowed with exit 0.
+- **C** — everything else. C never blocks; it is queued for **one** follow-up
+  chip, because working through review findings one at a time is where the
+  return falls off (section 9).
+
+The judge returns exactly one verdict: `COMPLETE` (no accepted A or B — the chip
+goes on to the gate and the merge), `CONTINUE` (accepted A/B fixable inside the
+claim — fix them, commit, green gate, next round), `ESCALATE` (a human decision
+is needed) or `IMPOSSIBLE` (the brief contradicts itself). The caps are
+mechanical, not left to the judge's mood: **at most 3 rounds**, the same HEAD as
+the previous round means no progress, a finding accepted twice means the fix is
+not working, a file outside the claim skips the critic altogether. After the
+critic, `git status --porcelain` in the worktree must be empty — a mutation left
+behind would otherwise be merged as a fix.
+
+**This is not the vote that section 6 rejects.** The judge does not replace a
+decision or a test; it filters the critic's claims against the code, so that an
+unfounded finding does not turn into work. Every accepted finding ends as a
+code change *with a test that fails without it*, and the merge is still decided
+by the gate, the hook and you. A verdict of `ESCALATE` is the loop doing its job,
+not failing at it.
+
+**When not to run it.** A chip whose DoD is a byte comparison or a grep
+(documentation, generated files) gains little; the gate already measures the
+whole behaviour. One round costs roughly 150–200 thousand tokens (critic plus
+judge), about twice a chip. Spend it on chips that change logic.
+
+How to install and call it: the README, section "The review loop".
+
 ---
 
 ## 5. Definition of done

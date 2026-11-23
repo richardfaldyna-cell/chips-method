@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -1248,3 +1249,127 @@ class TestMainRepoPrepinac(ZakladCLI):
         kod, out = self.spust_main("99")
         self.assertEqual(kod, 1)
         self.assertIn("nenalezen", out)
+
+
+# --------------------------------------------------------------------------
+# Chip 35 — rozpočet času: brána, které dojde čas, SELŽE; nikdy neprojde
+# --------------------------------------------------------------------------
+
+POMALY = 'python -c "import time; time.sleep(30)"'
+
+
+class TestSpustTimeout(Zaklad):
+    def test_timeout_zastavi_potomka_ne_jen_shell(self) -> None:
+        """Timeout musí doopravdy ukončit příkaz brány, ne jen shell nad ním."""
+        zacatek = time.monotonic()
+        kod, vystup = chip_gate.spust(self.repo, POMALY, 2)
+        self.assertEqual(kod, 124)
+        self.assertIn("timeout", vystup)
+        self.assertLess(time.monotonic() - zacatek, 15)
+
+
+class TestBranaTermin(Zaklad):
+    def test_prosly_termin_nespusti_nic(self) -> None:
+        stopa = self.repo / "stopa.txt"
+        c = self.nacti(prikazy=f'python -c "open(r\'{stopa}\',\'w\').write(\'x\')"')
+        ok, hlaseni = chip_gate.brana(c, self.repo, deadline=time.monotonic() - 1)
+        self.assertFalse(ok)
+        self.assertFalse(stopa.exists())
+        self.assertIn(chip_gate.ROZPOCET_VYCERPAN, " ".join(hlaseni))
+
+    def test_prikaz_delsi_nez_rozpocet_selze_vcas(self) -> None:
+        c = self.nacti(prikazy=POMALY)
+        zacatek = time.monotonic()
+        ok, hlaseni = chip_gate.brana(c, self.repo, deadline=zacatek + 2)
+        self.assertFalse(ok)
+        self.assertLess(time.monotonic() - zacatek, 15)
+        self.assertIn(chip_gate.ROZPOCET_VYCERPAN, " ".join(hlaseni))
+
+    def test_rozpocet_zkrati_timeout_kazdeho_prikazu(self) -> None:
+        c = self.nacti(prikazy='python -c "pass"')
+        with patch.object(chip_gate, "spust", return_value=(0, "")) as spust:
+            ok, _ = chip_gate.brana(c, self.repo, deadline=time.monotonic() + 50)
+        self.assertTrue(ok)
+        timeout = spust.call_args.args[2]
+        self.assertLessEqual(timeout, 50)
+        self.assertGreater(timeout, 40)
+
+    def test_stedry_termin_necha_zelenou_zelenou(self) -> None:
+        c = self.nacti(prikazy='python -c "pass"')
+        ok, _ = chip_gate.brana(c, self.repo, deadline=time.monotonic() + 120)
+        self.assertTrue(ok)
+
+    def test_bez_terminu_plati_puvodni_timeout(self) -> None:
+        c = self.nacti(prikazy='python -c "pass"')
+        with patch.object(chip_gate, "spust", return_value=(0, "")) as spust:
+            chip_gate.brana(c, self.repo)
+        self.assertEqual(spust.call_args.args[2], chip_gate.COMMAND_TIMEOUT)
+
+
+class TestHookRozpocet(Zaklad):
+    """Hook zamítá, když brána nedoběhne v jeho rozpočtu.
+
+    Claude Code při vypršení hooku příkaz pustí, takže tohle je rozdíl mezi
+    pomalou bránou a žádnou bránou.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.wt01 = self.worktree("01")
+
+    def vstup(self) -> str:
+        return json.dumps({"tool_name": "Bash", "cwd": str(self.repo),
+                           "tool_input": {"command": f'git -C "{self.repo}" merge chip/01-pokus'}})
+
+    def zavolej(self, argv: list[str], start: float | None = None) -> tuple[int, str]:
+        buf = io.StringIO()
+        with patch.object(sys, "stdin", io.StringIO(self.vstup())), redirect_stdout(buf):
+            kod = hook.main(argv, start)
+        return kod, buf.getvalue()
+
+    def test_rozpocet_z_argv(self) -> None:
+        self.assertEqual(hook.budget_from_argv([]), hook.DEFAULT_BUDGET)
+        self.assertEqual(hook.budget_from_argv(["--budget", "540"]), 540)
+        self.assertEqual(hook.budget_from_argv(["--budget=90"]), 90)
+        self.assertEqual(hook.budget_from_argv(["--budget", "abc"]), hook.DEFAULT_BUDGET)
+        self.assertEqual(hook.budget_from_argv(["--budget", "0"]), hook.DEFAULT_BUDGET)
+        self.assertEqual(hook.budget_from_argv(["--budget"]), hook.DEFAULT_BUDGET)
+
+    def test_vychozi_rozpocet_je_pod_starym_timeoutem_300s(self) -> None:
+        self.assertLess(hook.DEFAULT_BUDGET, 300)
+
+    def test_pomala_brana_je_zamitnuta(self) -> None:
+        self.nacti("01", prikazy=POMALY)
+        zacatek = time.monotonic()
+        kod, out = self.zavolej(["--budget", "2"])
+        self.assertLess(time.monotonic() - zacatek, 15)
+        self.assertEqual(kod, 0)
+        vystup = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(vystup["permissionDecision"], "deny")
+        self.assertIn("rozpočtu", vystup["permissionDecisionReason"])
+        self.assertIn("--hook-timeout", vystup["permissionDecisionReason"])
+
+    def test_rozpocet_se_pocita_od_startu_hooku(self) -> None:
+        """Zelená brána je přesto zamítnuta, když hook startoval moc dávno."""
+        self.nacti("01", prikazy='python -c "pass"')
+        kod, out = self.zavolej(["--budget", "5"], start=time.monotonic() - 10)
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_zelena_brana_v_rozpoctu_projde(self) -> None:
+        self.nacti("01", prikazy='python -c "pass"')
+        self.assertEqual(self.zavolej(["--budget", "60"]), (0, ""))
+
+    def test_skutecny_proces_hooku_zamitne_pomalou_branu_vcas(self) -> None:
+        """Skutečný skript ve vlastním procesu — žádná zkratka v procesu testu;
+        potomek brány nesmí držet hook naživu přes jeho rozpočet."""
+        self.nacti("01", prikazy=POMALY)
+        skript = Path(hook.__file__).resolve()
+        env = dict(os.environ, CHIPS_DIR=str(self.chips))
+        zacatek = time.monotonic()
+        p = subprocess.run([sys.executable, str(skript), "--budget", "3"],
+                           input=self.vstup(), capture_output=True, text=True,
+                           encoding="utf-8", timeout=60, env=env)
+        self.assertLess(time.monotonic() - zacatek, 20)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(p.stdout)["hookSpecificOutput"]["permissionDecision"],
+                         "deny")

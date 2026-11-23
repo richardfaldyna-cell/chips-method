@@ -424,6 +424,64 @@ tedy z tvrdých zdrojů, ne z toho, co agent napsal do souhrnu. Při vlně 6 byl
 rozdíl 37 odškrtnutých issues a pět stavů.</p>
 <p><strong>Když brána selže, chip nekončí mergem, ale otevřeným PR.</strong> To je celý rozdíl<br />
 mezi „autonomní" a „bez dohledu".</p>
+<h3 id="review-smycka-po-zelene-brane-pred-mergem">Review smyčka: po zelené bráně, před mergem</h3>
+<p>Zelená brána dokazuje, že testy chipu procházejí. Nedokazuje, že by si ty testy<br />
+všimly rozbitého chipu — psal je tentýž model jako kód (viz role reviewera<br />
+v § 9). Review smyčka je volitelný krok, který ověřuje právě to, dvěma rolemi,<br />
+které kód nepsaly:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Vidí</th>
+<th>Smí</th>
+<th>Nesmí</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>critic</strong></td>
+<td>brief, diff, podklady z <code>chip_review.py</code></td>
+<td>spustit bránu a testy, dočasně rozbít kód a sledovat, jestli test spadne (mutace), hlásit nálezy s citací <code>soubor:řádek</code></td>
+<td>cokoli opravit, nechat worktree změněný, commitovat, mergovat, sahat na brief</td>
+</tr>
+<tr>
+<td><strong>judge</strong></td>
+<td>totéž plus nálezy critica</td>
+<td>otevřít každé citované místo a nález přijmout nebo zamítnout, vrátit jeden verdikt</td>
+<td>přidávat vlastní nálezy, spouštět příkazy, zapisovat soubory, rozhodovat o merge</td>
+</tr>
+</tbody>
+</table>
+<p>Nálezy se hodnotí <strong>proti briefu, ne proti vkusu</strong>:</p>
+<ul>
+<li><strong>A</strong> — chip je špatně proti vlastnímu briefu: odškrtnutá položka DoD, která<br />
+  neplatí, odškrtnutá issue bez kódu, test, který přežije mutaci, soubor mimo<br />
+  nárok, položka T3 rozhodnutá místo eskalovaná.</li>
+<li><strong>B</strong> — brief je splněný, ale neobhájený: položka DoD, kterou nic neověřuje,<br />
+  neošetřený vstup, který z issues plyne, chyba spolknutá s exit 0.</li>
+<li><strong>C</strong> — všechno ostatní. C nikdy neblokuje; sbírá se do fronty pro <strong>jeden</strong><br />
+  navazující chip, protože opravovat nálezy review po jednom je přesně místo,<br />
+  kde výnos padá (§ 9).</li>
+</ul>
+<p>Judge vrací právě jeden verdikt: <code>COMPLETE</code> (žádné přijaté A ani B — chip jde<br />
+dál k bráně a merge), <code>CONTINUE</code> (přijatá A/B opravitelná v rámci nároku —<br />
+opravit, commitnout, zelená brána, další kolo), <code>ESCALATE</code> (potřeba rozhodnutí<br />
+člověka) nebo <code>IMPOSSIBLE</code> (brief si odporuje). Stropy jsou mechanické, ne<br />
+podle nálady judge: <strong>nejvýš 3 kola</strong>, stejný HEAD jako minulé kolo znamená<br />
+žádný pokrok, nález přijatý dvakrát znamená, že oprava nefunguje, soubor mimo<br />
+nárok critica úplně přeskočí. Po criticovi musí být <code>git status --porcelain</code><br />
+ve worktree prázdný — zapomenutá mutace by se jinak zmergovala jako oprava.</p>
+<p><strong>Není to hlasování, které § 6 odmítá.</strong> Judge nenahrazuje rozhodnutí ani test;<br />
+filtruje tvrzení critica proti kódu, aby se z nepodloženého nálezu nestala<br />
+práce. Každý přijatý nález končí změnou kódu <em>s testem, který bez ní padá</em>,<br />
+a o merge dál rozhoduje brána, hook a ty. Verdikt <code>ESCALATE</code> je smyčka, která<br />
+dělá svou práci, ne smyčka, která selhala.</p>
+<p><strong>Kdy ji nepouštět.</strong> Chip, jehož DoD je porovnání bajtů nebo grep<br />
+(dokumentace, generované soubory), získá málo; brána už měří celé chování.<br />
+Jedno kolo stojí zhruba 150–200 tisíc tokenů (critic plus judge), asi dvojnásobek<br />
+chipu. Utrácej je za chipy, které mění logiku.</p>
+<p>Jak smyčku nainstalovat a volat: README, sekce „Review smyčka".</p>
 <hr />
 <h2 id="5-definition-of-done">5. Definition of done</h2>
 <p>Musí jít ověřit příkazem, ne názorem. Test:</p>
